@@ -286,6 +286,19 @@ function CalendarTab({events,setEvents,categories,setCategories,tasks,setTasks})
         <ModalBtns onCancel={()=>setShowAdd(false)} onSave={saveEv} label="Add Block"/>
       </Modal>}
 
+      {editTask&&<Modal onClose={()=>setEditTask(null)} title="Edit Task Time">
+        <p style={{fontSize:13,color:"#5a8a6a",marginBottom:12}}>Adjust the time for this task.</p>
+        <div style={{display:"flex",gap:8,marginBottom:16}}>
+          <div style={{flex:1}}><label style={mLabel}>Start</label>
+            <select value={editTask.sh} onChange={e=>setEditTask(p=>({...p,sh:+e.target.value}))} style={mInput}>{HOURS.map(h=><option key={h} value={h}>{fmtHour(h)}</option>)}</select>
+          </div>
+          <div style={{flex:1}}><label style={mLabel}>End</label>
+            <select value={editTask.eh} onChange={e=>setEditTask(p=>({...p,eh:+e.target.value}))} style={mInput}>{HOURS.map(h=><option key={h} value={h}>{fmtHour(h)}</option>)}</select>
+          </div>
+        </div>
+        <ModalBtns onCancel={()=>setEditTask(null)} onSave={saveTaskTime} label="Save Time"/>
+      </Modal>}
+
       {showCat&&<Modal onClose={()=>setShowCat(false)} title="New Category">
         <input value={newCat.label} onChange={e=>setNewCat(p=>({...p,label:e.target.value}))} placeholder="Category name..." style={{...mInput,marginBottom:10}}/>
         <input value={newCat.emoji} onChange={e=>setNewCat(p=>({...p,emoji:e.target.value}))} placeholder="Emoji (e.g. 🏋️)" style={{...mInput,marginBottom:10}}/>
@@ -296,19 +309,6 @@ function CalendarTab({events,setEvents,categories,setCategories,tasks,setTasks})
     </div>
   );
 }
-
-      {editTask&&<Modal onClose={()=>setEditTask(null)} title="Edit Task Time">
-        <p style={{fontSize:13,color:"#5a8a6a",marginBottom:12}}>Adjust the time block for this task on the calendar.</p>
-        <div style={{display:"flex",gap:8,marginBottom:16}}>
-          <div style={{flex:1}}><label style={mLabel}>Start Time</label>
-            <select value={editTask.sh} onChange={e=>setEditTask(p=>({...p,sh:+e.target.value}))} style={mInput}>{HOURS.map(h=><option key={h} value={h}>{fmtHour(h)}</option>)}</select>
-          </div>
-          <div style={{flex:1}}><label style={mLabel}>End Time</label>
-            <select value={editTask.eh} onChange={e=>setEditTask(p=>({...p,eh:+e.target.value}))} style={mInput}>{HOURS.map(h=><option key={h} value={h}>{fmtHour(h)}</option>)}</select>
-          </div>
-        </div>
-        <ModalBtns onCancel={()=>setEditTask(null)} onSave={saveTaskTime} label="Save Time"/>
-      </Modal>}
 
 function Modal({children,onClose,title}){
   return(
