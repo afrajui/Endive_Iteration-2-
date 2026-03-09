@@ -145,6 +145,9 @@ function EventCard({ev,cats}){
 }
 
 // ── Onboarding ────────────────────────────────────────────────────────────────
+const OL_HD={fontFamily:"'Lora',serif",fontSize:20,fontWeight:600,color:"#1a3028",marginBottom:6};
+const OL_SB={fontSize:13,color:"#6a9a7a",marginBottom:12,lineHeight:1.6};
+
 function Onboarding({onDone}){
   const [step,setStep]=useState(0);
   const [fade,setFade]=useState(true);
@@ -167,15 +170,15 @@ function Onboarding({onDone}){
   const steps=[
     <div key="0">
       <div style={{fontSize:40,marginBottom:10}}>👋</div>
-      <h2 style={hd}>Hi! I'm Endive.</h2>
-      <p style={sb}>Your personal burnout-prevention assistant. Quick setup — 2 minutes.</p>
+      <h2 style={OL_HD}>Hi! I'm Endive.</h2>
+      <p style={OL_SB}>Your personal burnout-prevention assistant. Quick setup — 2 minutes.</p>
       <label style={S.label}>What's your name?</label>
       <input autoFocus value={d.name} onChange={e=>setD(p=>({...p,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&canNext[0]&&go(1)} placeholder="Your first name..." style={S.input}/>
     </div>,
 
     <div key="1">
       <div style={{fontSize:40,marginBottom:10}}>🎓</div>
-      <h2 style={hd}>Hey {d.name}! What year are you?</h2>
+      <h2 style={OL_HD}>Hey {d.name}! What year are you?</h2>
       <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:6}}>
         {YEAR_OPTS.map(y=><button key={y} onClick={()=>setD(p=>({...p,year:y}))} style={{...S.chip,background:d.year===y?"#4a9e7a":"#f0f7f2",color:d.year===y?"#fff":"#3a6a4a",border:`1.5px solid ${d.year===y?"#4a9e7a":"#c2dece"}`}}>{y}</button>)}
       </div>
@@ -183,8 +186,8 @@ function Onboarding({onDone}){
 
     <div key="2">
       <div style={{fontSize:40,marginBottom:10}}>💭</div>
-      <h2 style={hd}>What weighs on you most?</h2>
-      <p style={sb}>No judgment — select all that apply.</p>
+      <h2 style={OL_HD}>What weighs on you most?</h2>
+      <p style={OL_SB}>No judgment — select all that apply.</p>
       <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
         {STRESS_OPTS.map(s=>{const sel=d.stressors.includes(s);return<button key={s} onClick={()=>tog("stressors",s)} style={{...S.chip,background:sel?"#e07b5a":"#f0f7f2",color:sel?"#fff":"#3a6a4a",border:`1.5px solid ${sel?"#e07b5a":"#c2dece"}`}}>{s}</button>;})}
       </div>
@@ -192,16 +195,16 @@ function Onboarding({onDone}){
 
     <div key="3">
       <div style={{fontSize:40,marginBottom:10}}>🗓️</div>
-      <h2 style={hd}>Recurring commitments</h2>
-      <p style={sb}>Classes, work shifts, gym, clubs... Endive will always schedule around these.</p>
+      <h2 style={OL_HD}>Recurring commitments</h2>
+      <p style={OL_SB}>Classes, work shifts, gym, clubs... Endive will always schedule around these.</p>
       <textarea value={d.commitments} onChange={e=>setD(p=>({...p,commitments:e.target.value}))} placeholder={"e.g. BIO 101 MWF 10-11am\nWork Tue/Thu 3-6pm\nGym Mon/Wed 7am"} style={{...S.input,height:96,resize:"none",lineHeight:1.6}}/>
       <p style={{fontSize:11,color:"#8aaa9a",marginTop:5}}>Optional — you can always add more later.</p>
     </div>,
 
     <div key="4">
       <div style={{fontSize:40,marginBottom:10}}>😴</div>
-      <h2 style={hd}>Your sleep schedule</h2>
-      <p style={sb}>Endive will never schedule anything during your sleep. Ever.</p>
+      <h2 style={OL_HD}>Your sleep schedule</h2>
+      <p style={OL_SB}>Endive will never schedule anything during your sleep. Ever.</p>
       <div style={{display:"flex",gap:14,marginTop:4}}>
         <div style={{flex:1}}><label style={S.label}>Bedtime</label>
           <select value={d.sleepH} onChange={e=>setD(p=>({...p,sleepH:+e.target.value}))} style={S.input}>{HOURS.map(h=><option key={h} value={h}>{fmtH(h)}</option>)}</select>
@@ -214,7 +217,7 @@ function Onboarding({onDone}){
 
     <div key="5">
       <div style={{fontSize:40,marginBottom:10}}>🌱</div>
-      <h2 style={hd}>What do you want from Endive?</h2>
+      <h2 style={OL_HD}>What do you want from Endive?</h2>
       <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:6}}>
         {GOAL_OPTS.map(g=>{const sel=d.goals.includes(g);return<button key={g} onClick={()=>tog("goals",g)} style={{...S.chip,background:sel?"#7c6fcd":"#f0f7f2",color:sel?"#fff":"#3a6a4a",border:`1.5px solid ${sel?"#7c6fcd":"#c2dece"}`}}>{g}</button>;})}
       </div>
@@ -222,8 +225,8 @@ function Onboarding({onDone}){
 
     <div key="6">
       <div style={{fontSize:40,marginBottom:10}}>⏱️</div>
-      <h2 style={hd}>How do you like to work?</h2>
-      <p style={sb}>Endive plans around your style.</p>
+      <h2 style={OL_HD}>How do you like to work?</h2>
+      <p style={OL_SB}>Endive plans around your style.</p>
       <div style={{display:"flex",flexDirection:"column",gap:7,marginTop:4}}>
         {TIME_STYLES.map(ts=>{const sel=d.timeStyle===ts.id;return(
           <button key={ts.id} onClick={()=>setD(p=>({...p,timeStyle:ts.id}))} style={{padding:"10px 14px",borderRadius:10,border:`1.5px solid ${sel?"#4a9e7a":"#c2dece"}`,background:sel?"#e8f5ef":"#f8fbf9",textAlign:"left",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
@@ -236,8 +239,8 @@ function Onboarding({onDone}){
 
     <div key="7" style={{textAlign:"center"}}>
       <div style={{fontSize:52,marginBottom:12}}>🌿</div>
-      <h2 style={{...hd,textAlign:"center"}}>All set, {d.name}!</h2>
-      <p style={{...sb,textAlign:"center"}}>Endive knows what matters to you. Let's build something sustainable.</p>
+      <h2 style={{...OL_HD,textAlign:"center"}}>All set, {d.name}!</h2>
+      <p style={{...OL_SB,textAlign:"center"}}>Endive knows what matters to you. Let's build something sustainable.</p>
       <div style={{background:"#e8f5ef",borderRadius:12,padding:"12px 16px",marginTop:14,textAlign:"left"}}>
         {[`${d.year}`,`Style: ${TIME_STYLES.find(t=>t.id===d.timeStyle)?.label||"flexible"}`,`Sleep: ${fmtH(d.sleepH)} – ${fmtH(d.wakeH)}`,d.commitments?`${d.commitments.split("\n").filter(Boolean).length} recurring commitment(s)`:null].filter(Boolean).map((item,i)=>(
           <div key={i} style={{fontSize:12,color:"#2a5a3a",padding:"2px 0",display:"flex",gap:6}}><span style={{color:"#4a9e7a"}}>✓</span>{item}</div>
@@ -247,8 +250,6 @@ function Onboarding({onDone}){
   ];
 
   const isLast=step===steps.length-1;
-  const hd={fontFamily:"'Lora',serif",fontSize:20,fontWeight:600,color:"#1a3028",marginBottom:6};
-  const sb={fontSize:13,color:"#6a9a7a",marginBottom:12,lineHeight:1.6};
 
   return(
     <div style={{position:"fixed",inset:0,background:"#eef7f2",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:16}}>
