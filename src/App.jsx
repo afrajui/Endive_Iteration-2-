@@ -47,6 +47,63 @@ function taskToBlock(t){
   return{id:`task-${t.id}`,title:t.text,start:`${t.date}T${pad(sh)}:00:00`,end:`${t.date}T${pad(eh)}:00:00`,category:t.category||"personal",description:"📌 Task",isTask:true,taskId:t.id};
 }
 
+// Generate all instances of a recurring event
+function generateRecurring(ev){
+  const{title,sh,eh,category,description,date,recur,recurDays,recurWeeks}=ev;
+  if(!date||recur==="none"){
+    return[{id:Date.now()+Math.random(),title,start:`${date}T${pad(sh)}:00:00`,end:`${date}T${pad(eh)}:00:00`,category,description}];
+  }
+  const instances=[];
+  const start=new Date(date+"T12:00:00");
+  const totalWeeks=parseInt(recurWeeks)||4;
+  const endDate=new Date(start);
+  endDate.setDate(endDate.getDate()+totalWeeks*7);
+
+  if(recur==="daily"){
+    const cur=new Date(start);
+    while(cur<=endDate){
+      const d=`${cur.getFullYear()}-${pad(cur.getMonth()+1)}-${pad(cur.getDate())}`;
+      instances.push({id:Date.now()+Math.random(),title,start:`${d}T${pad(sh)}:00:00`,end:`${d}T${pad(eh)}:00:00`,category,description,recurId:title+date});
+      cur.setDate(cur.getDate()+1);
+    }
+  } else if(recur==="weekly"){
+    const days=recurDays.length>0?recurDays:[start.getDay()];
+    const cur=new Date(start);
+    cur.setDate(cur.getDate()-cur.getDay()); // go to Sunday of start week
+    while(cur<=endDate){
+      for(const day of days){
+        const d=new Date(cur);
+        d.setDate(d.getDate()+day);
+        if(d>=start&&d<=endDate){
+          const ds=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+          instances.push({id:Date.now()+Math.random(),title,start:`${ds}T${pad(sh)}:00:00`,end:`${ds}T${pad(eh)}:00:00`,category,description,recurId:title+date});
+        }
+      }
+      cur.setDate(cur.getDate()+7);
+    }
+  } else if(recur==="biweekly"){
+    const days=recurDays.length>0?recurDays:[start.getDay()];
+    const cur=new Date(start);
+    cur.setDate(cur.getDate()-cur.getDay());
+    let week=0;
+    while(cur<=endDate){
+      if(week%2===0){
+        for(const day of days){
+          const d=new Date(cur);
+          d.setDate(d.getDate()+day);
+          if(d>=start&&d<=endDate){
+            const ds=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+            instances.push({id:Date.now()+Math.random(),title,start:`${ds}T${pad(sh)}:00:00`,end:`${ds}T${pad(eh)}:00:00`,category,description,recurId:title+date});
+          }
+        }
+      }
+      cur.setDate(cur.getDate()+7);
+      week++;
+    }
+  }
+  return instances;
+}
+
 function toGCalLink({title,start,end,description="",location=""}){
   const f=d=>new Date(d).toISOString().replace(/[-:]/g,"").split(".")[0]+"Z";
   return`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${f(start)}/${f(end||new Date(new Date(start).getTime()+3600000).toISOString())}&details=${encodeURIComponent(description)}&location=${encodeURIComponent(location)}`;
@@ -95,12 +152,12 @@ function EventCard({event,categories}){
 }
 
 // ─── CALENDAR TAB ────────────────────────────────────────────────────────────
-function CalendarTab({events,setEvents,categories,setCategories,tasks,setTasks}){
+function CalendarTab({events,setEvents,categories,setCategories,tasks,setTasks,onEndiveAction}){
   const today=new Date();
   const [view,setView]=useState("month");
   const [cur,setCur]=useState({year:today.getFullYear(),month:today.getMonth(),day:today.getDate()});
   const [showAdd,setShowAdd]=useState(false);
-  const [newEv,setNewEv]=useState({title:"",date:todayStr(),sh:9,eh:10,category:"personal",description:""});
+  const [newEv,setNewEv]=useState({title:"",date:todayStr(),sh:9,eh:10,category:"personal",description:"",recur:"none",recurDays:[],recurWeeks:4});
   const [showCat,setShowCat]=useState(false);
   const [newCat,setNewCat]=useState({label:"",emoji:"📌",color:"#4a9e7a"});
   const [editTask,setEditTask]=useState(null);
@@ -117,8 +174,10 @@ function CalendarTab({events,setEvents,categories,setCategories,tasks,setTasks})
 
   const saveEv=()=>{
     if(!newEv.title.trim()) return;
-    setEvents(prev=>[...prev,{id:Date.now(),title:newEv.title.trim(),start:`${newEv.date}T${pad(newEv.sh)}:00:00`,end:`${newEv.date}T${pad(newEv.eh)}:00:00`,category:newEv.category,description:newEv.description}]);
-    setShowAdd(false);setNewEv({title:"",date:todayStr(),sh:9,eh:10,category:"personal",description:""});
+    const instances=generateRecurring({...newEv,title:newEv.title.trim()});
+    setEvents(prev=>[...prev,...instances]);
+    setShowAdd(false);
+    setNewEv({title:"",date:todayStr(),sh:9,eh:10,category:"personal",description:"",recur:"none",recurDays:[],recurWeeks:4});
   };
   const saveCat=()=>{
     if(!newCat.label.trim()) return;
@@ -136,6 +195,7 @@ function CalendarTab({events,setEvents,categories,setCategories,tasks,setTasks})
 
   return(
     <div>
+      <InsightStrip tasks={tasks||[]} events={events} onAction={onEndiveAction||((a)=>{})}/>
       <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12,alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",gap:4}}>
           {["year","month","week","day"].map(v=>(
@@ -198,7 +258,7 @@ function CalendarTab({events,setEvents,categories,setCategories,tasks,setTasks})
                 return(
                   <div key={i} onClick={()=>{if(day){setCur(c=>({...c,day}));setView("day");}}} style={{minHeight:58,padding:3,borderRadius:8,background:isT?"#4a9e7a12":"#f8fbf9",border:`1px solid ${isT?"#4a9e7a":"#e8f2ec"}`,cursor:day?"pointer":"default"}}>
                     <div style={{fontSize:12,fontWeight:isT?700:400,color:isT?"#4a9e7a":"#1a3028",marginBottom:2}}>{day}</div>
-                    {des.slice(0,2).map(ev=>{const cat=categories.find(c=>c.id===ev.category)||categories[3];return<div key={ev.id} style={{fontSize:9,padding:"1px 3px",borderRadius:3,background:cat.color,color:"#fff",marginBottom:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{cat.emoji} {ev.title}</div>;})}
+                    {des.slice(0,2).map(ev=>{const cat=categories.find(c=>c.id===ev.category)||categories[3];return<div key={ev.id} style={{fontSize:9,padding:"1px 3px",borderRadius:3,background:cat.color,color:"#fff",marginBottom:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{ev.recurId?"🔁 ":""}{cat.emoji} {ev.title}</div>;})}
                     {des.length>2&&<div style={{fontSize:9,color:"#8aaa9a"}}>+{des.length-2}</div>}
                   </div>
                 );
@@ -255,9 +315,12 @@ function CalendarTab({events,setEvents,categories,setCategories,tasks,setTasks})
                   {slotEvs.map(ev=>{
                     const cat=categories.find(c=>c.id===ev.category)||categories[3];
                     const eh=ev.end?parseInt(ev.end.split("T")[1]||String(h+1)):h+1;
-                    return<div key={ev.id} onClick={ev.isTask?()=>setEditTask({taskId:ev.taskId,sh:parseInt(ev.start.split("T")[1]||"9"),eh:parseInt(ev.end.split("T")[1]||"10")}):undefined} style={{padding:"5px 10px",borderRadius:8,background:cat.bg,borderLeft:`3px solid ${cat.color}`,border:ev.isTask?`1.5px dashed ${cat.color}`:`none`,borderLeft:`3px solid ${cat.color}`,fontSize:12,color:"#1a3028",flex:1,minWidth:120,cursor:ev.isTask?"pointer":"default"}}>
-                      <div style={{fontWeight:600}}>{cat.emoji} {ev.title}{ev.isTask&&<span style={{fontSize:9,marginLeft:4,opacity:0.6}}>📌 tap to edit time</span>}</div>
-                      <div style={{fontSize:10,color:cat.color}}>{pad(h)}:00 – {pad(eh)}:00</div>
+                    return<div key={ev.id} onClick={ev.isTask?()=>setEditTask({taskId:ev.taskId,sh:parseInt(ev.start.split("T")[1]||"9"),eh:parseInt(ev.end.split("T")[1]||"10")}):undefined} style={{padding:"5px 10px",borderRadius:8,background:cat.bg,borderLeft:`3px solid ${cat.color}`,border:ev.isTask?`1.5px dashed ${cat.color}`:"none",borderLeft:`3px solid ${cat.color}`,fontSize:12,color:"#1a3028",flex:1,minWidth:120,cursor:ev.isTask?"pointer":"default"}}>
+                      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:4}}>
+                        <div style={{fontWeight:600,flex:1}}>{ev.recurId&&<span style={{fontSize:9,background:cat.color+"33",color:cat.color,borderRadius:3,padding:"1px 4px",marginRight:4}}>🔁 series</span>}{cat.emoji} {ev.title}{ev.isTask&&<span style={{fontSize:9,marginLeft:4,opacity:0.6}}>📌 tap to edit</span>}</div>
+                        {!ev.isTask&&<button onClick={e=>{e.stopPropagation();ev.recurId?setEvents(p=>p.filter(x=>x.recurId!==ev.recurId)):setEvents(p=>p.filter(x=>x.id!==ev.id));}} style={{background:"none",border:"none",color:"#ccc",cursor:"pointer",fontSize:13,lineHeight:1,padding:0,flexShrink:0}}>×</button>}
+                      </div>
+                      <div style={{fontSize:10,color:cat.color,marginTop:2}}>{pad(h)}:00 – {pad(eh)}:00</div>
                       {ev.description&&!ev.isTask&&<div style={{fontSize:10,color:"#666",marginTop:1}}>{ev.description}</div>}
                     </div>;
                   })}
@@ -282,8 +345,32 @@ function CalendarTab({events,setEvents,categories,setCategories,tasks,setTasks})
         </div>
         <label style={mLabel}>Category</label>
         <select value={newEv.category} onChange={e=>setNewEv(p=>({...p,category:e.target.value}))} style={{...mInput,marginBottom:10}}>{categories.map(c=><option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}</select>
-        <input value={newEv.description} onChange={e=>setNewEv(p=>({...p,description:e.target.value}))} placeholder="Notes (optional)" style={{...mInput,marginBottom:16}}/>
-        <ModalBtns onCancel={()=>setShowAdd(false)} onSave={saveEv} label="Add Block"/>
+        <input value={newEv.description} onChange={e=>setNewEv(p=>({...p,description:e.target.value}))} placeholder="Notes (optional)" style={{...mInput,marginBottom:10}}/>
+        <label style={mLabel}>Repeat</label>
+        <select value={newEv.recur} onChange={e=>setNewEv(p=>({...p,recur:e.target.value,recurDays:[]}))} style={{...mInput,marginBottom:newEv.recur!=="none"?8:16}}>
+          <option value="none">Does not repeat</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly (pick days)</option>
+          <option value="biweekly">Biweekly (every 2 weeks)</option>
+        </select>
+        {(newEv.recur==="weekly"||newEv.recur==="biweekly")&&(
+          <div style={{display:"flex",gap:5,marginBottom:8,flexWrap:"wrap"}}>
+            {["Su","Mo","Tu","We","Th","Fr","Sa"].map((d,i)=>{
+              const sel=newEv.recurDays.includes(i);
+              return<button key={i} onClick={()=>setNewEv(p=>({...p,recurDays:sel?p.recurDays.filter(x=>x!==i):[...p.recurDays,i]}))} style={{width:34,height:34,borderRadius:"50%",border:`2px solid ${sel?"#4a9e7a":"#e0ece6"}`,background:sel?"#4a9e7a":"#fff",color:sel?"#fff":"#5a8a6a",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{d}</button>;
+            })}
+          </div>
+        )}
+        {newEv.recur!=="none"&&(
+          <div style={{marginBottom:16}}>
+            <label style={mLabel}>Repeat for how many weeks?</label>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <input type="range" min="1" max="20" value={newEv.recurWeeks} onChange={e=>setNewEv(p=>({...p,recurWeeks:+e.target.value}))} style={{flex:1,accentColor:"#4a9e7a"}}/>
+              <span style={{fontSize:14,fontWeight:600,color:"#4a9e7a",minWidth:50}}>{newEv.recurWeeks} {newEv.recurWeeks===1?"week":"weeks"}</span>
+            </div>
+          </div>
+        )}
+        <ModalBtns onCancel={()=>setShowAdd(false)} onSave={saveEv} label={newEv.recur==="none"?"Add Block":`Add ${generateRecurring({...newEv,title:newEv.title||"x"}).length} Blocks`}/>
       </Modal>}
 
       {editTask&&<Modal onClose={()=>setEditTask(null)} title="Edit Task Time">
@@ -330,7 +417,7 @@ function ModalBtns({onCancel,onSave,label}){
 }
 
 // ─── TASKS TAB ───────────────────────────────────────────────────────────────
-function TasksTab({tasks,setTasks,categories}){
+function TasksTab({tasks,setTasks,categories,events,onEndiveAction}){
   const [input,setInput]=useState("");
   const [date,setDate]=useState("");
   const [cat,setCat]=useState("personal");
@@ -374,6 +461,7 @@ function TasksTab({tasks,setTasks,categories}){
 
   return(
     <div>
+      <InsightStrip tasks={tasks} events={events||[]} onAction={onEndiveAction||((a)=>{})}/>
       <div style={{background:"#f8fbf9",borderRadius:12,padding:12,marginBottom:14}}>
         <div style={{display:"flex",gap:6,marginBottom:8}}>
           <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="Add a task..." style={{...iStyle,flex:1}}/>
@@ -466,14 +554,60 @@ function parseB(text,tag){
 function clean(text){return text.replace(/```(event|task)\n[\s\S]*?```/g,"").trim();}
 function md(text){return text.split(/(\*\*[^*]+\*\*)/).map((p,i)=>p.startsWith("**")&&p.endsWith("**")?<strong key={i}>{p.slice(2,-2)}</strong>:p);}
 
-function ChatTab({tasks,setTasks,events,setEvents,categories}){
+function ChatTab({tasks,setTasks,events,setEvents,categories,pendingAction,clearPendingAction}){
   const [msgs,setMsgs]=useState([]);
   const [input,setInput]=useState("");
   const [loading,setLoading]=useState(false);
   const [started,setStarted]=useState(false);
+  const [listening,setListening]=useState(false);
+  const [muted,setMuted]=useState(false);
   const ref=useRef(null);
+  const recognitionRef=useRef(null);
+
+  const speak=(text)=>{
+    if(muted) return;
+    window.speechSynthesis.cancel();
+    const clean=text.replace(/[*_#]/g,"").replace(/```[\s\S]*?```/g,"").trim();
+    const utt=new SpeechSynthesisUtterance(clean);
+    utt.rate=0.95; utt.pitch=1.05; utt.volume=1;
+    // Pick a warm female voice if available
+    const voices=window.speechSynthesis.getVoices();
+    const preferred=voices.find(v=>/samantha|karen|moira|fiona|victoria|zira|google us english/i.test(v.name));
+    if(preferred) utt.voice=preferred;
+    window.speechSynthesis.speak(utt);
+  };
+
+  const startListening=()=>{
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){ alert("Voice input isn't supported on this browser. Try Safari on iPhone or Chrome on Android."); return; }
+    const r=new SR();
+    r.continuous=false; r.interimResults=false; r.lang="en-US";
+    r.onstart=()=>setListening(true);
+    r.onend=()=>setListening(false);
+    r.onerror=()=>setListening(false);
+    r.onresult=(e)=>{
+      const transcript=e.results[0][0].transcript;
+      setInput(transcript);
+      // Auto-send after a short delay
+      setTimeout(()=>sendText(transcript),300);
+    };
+    recognitionRef.current=r;
+    r.start();
+  };
+
+  const stopListening=()=>{
+    recognitionRef.current?.stop();
+    setListening(false);
+  };
 
   useEffect(()=>{ref.current?.scrollIntoView({behavior:"smooth"});},[msgs,loading]);
+
+  useEffect(()=>{
+    if(pendingAction&&started&&!loading){
+      clearPendingAction?.();
+      sendText(pendingAction);
+    }
+  },[pendingAction,started]);
 
   const ctx=()=>{
     const t=tasks.length>0?`Tasks:\n${tasks.map(t=>`- [${t.done?"✓":"○"}] ${t.text}${t.date?` due:${t.date}`:""} [${t.category}]`).join("\n")}`:"No tasks.";
@@ -489,12 +623,12 @@ function ChatTab({tasks,setTasks,events,setEvents,categories}){
   useEffect(()=>{
     if(started) return;setStarted(true);setLoading(true);
     call([{role:"user",content:"Start with your greeting."}])
-      .then(d=>{const raw=d.content?.map(b=>b.text||"").join("")||"Hi! 🌿 I'm Endive. How are you feeling today?";setMsgs([{role:"assistant",content:clean(raw),evs:parseB(raw,"event"),tsks:parseB(raw,"task")}]);})
-      .catch(()=>setMsgs([{role:"assistant",content:"Hi! 🌿 I'm Endive, your personal assistant. How are you feeling today?"}]))
+      .then(d=>{const raw=d.content?.map(b=>b.text||"").join("")||"Hi! 🌿 I'm Endive. How are you feeling today?";const g=clean(raw);setMsgs([{role:"assistant",content:g,evs:parseB(raw,"event"),tsks:parseB(raw,"task")}]);setTimeout(()=>speak(g),600);})
+      .catch(()=>{const fb="Hi! 🌿 I'm Endive, your personal assistant. How are you feeling today?";setMsgs([{role:"assistant",content:fb}]);setTimeout(()=>speak(fb),600);})
       .finally(()=>setLoading(false));
   },[]);
 
-  const send=async(text)=>{
+  const sendText=async(text)=>{
     const u=(text||input).trim();if(!u||loading) return;
     setInput("");
     const nm=[...msgs,{role:"user",content:u}];
@@ -505,8 +639,14 @@ function ChatTab({tasks,setTasks,events,setEvents,categories}){
       const ne=parseB(raw,"event"),nt=parseB(raw,"task");
       if(ne.length>0) setEvents(p=>[...p,...ne.map(e=>({...e,id:Date.now()+Math.random()}))]);
       if(nt.length>0) setTasks(p=>[...p,...nt.map(t=>({...t,id:Date.now()+Math.random(),done:false}))]);
-      setMsgs(p=>[...p,{role:"assistant",content:clean(raw),evs:ne,tsks:nt}]);
-    }catch{setMsgs(p=>[...p,{role:"assistant",content:"Something went wrong. Please try again."}]);}
+      const cleaned=clean(raw);
+      setMsgs(p=>[...p,{role:"assistant",content:cleaned,evs:ne,tsks:nt}]);
+      speak(cleaned);
+    }catch{
+      const err="Something went wrong. Please try again.";
+      setMsgs(p=>[...p,{role:"assistant",content:err}]);
+      speak(err);
+    }
     setLoading(false);
   };
 
@@ -545,12 +685,25 @@ function ChatTab({tasks,setTasks,events,setEvents,categories}){
       </div>
       {msgs.length<=1&&!loading&&(
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-          {quick.map(p=><button key={p} onClick={()=>send(p)} style={{padding:"6px 11px",borderRadius:20,border:"1.5px solid #c2dece",background:"#f0f7f2",color:"#3a7a5a",fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{p}</button>)}
+          {quick.map(p=><button key={p} onClick={()=>sendText(p)} style={{padding:"6px 11px",borderRadius:20,border:"1.5px solid #c2dece",background:"#f0f7f2",color:"#3a7a5a",fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{p}</button>)}
         </div>
       )}
-      <div style={{display:"flex",gap:8}}>
-        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Talk to Endive..." style={{...iStyle,flex:1}}/>
-        <button onClick={()=>send()} disabled={loading} style={{...aBtn,width:44,fontSize:18,background:loading?"#b2d2be":"#4a9e7a"}}>→</button>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendText()} placeholder={listening?"Listening...":"Talk to Endive..."} style={{...iStyle,flex:1,background:listening?"#e8f5ef":"#f8fbf9"}}/>
+        <button
+          onMouseDown={startListening} onMouseUp={stopListening}
+          onTouchStart={e=>{e.preventDefault();startListening();}} onTouchEnd={e=>{e.preventDefault();stopListening();}}
+          style={{...aBtn,width:42,background:listening?"#e07b5a":"#4a9e7a",fontSize:16,flexShrink:0,position:"relative"}}>
+          {listening
+            ? <span style={{fontSize:14}}>⏹</span>
+            : <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12 1a4 4 0 014 4v7a4 4 0 01-8 0V5a4 4 0 014-4zm6.5 10a.5.5 0 011 0A7.5 7.5 0 0112 18.5V21h3a.5.5 0 010 1H9a.5.5 0 010-1h3v-2.5A7.5 7.5 0 014.5 11a.5.5 0 011 0 6.5 6.5 0 0013 0z"/></svg>
+          }
+          {listening&&<span style={{position:"absolute",top:-3,right:-3,width:8,height:8,borderRadius:"50%",background:"#e07b5a",animation:"pulse 1s infinite"}}/>}
+        </button>
+        <button onClick={()=>sendText()} disabled={loading} style={{...aBtn,width:42,fontSize:17,background:loading?"#b2d2be":"#4a9e7a",flexShrink:0}}>→</button>
+        <button onClick={()=>{setMuted(m=>!m);window.speechSynthesis.cancel();}} style={{...aBtn,width:36,fontSize:14,background:muted?"#e8f2ec":"#4a9e7a",flexShrink:0}} title={muted?"Unmute Endive":"Mute Endive"}>
+          {muted?"🔇":"🔊"}
+        </button>
       </div>
     </div>
   );
@@ -565,7 +718,84 @@ const secLbl={fontSize:11,fontWeight:700,letterSpacing:"0.08em",color:"#8aaa9a",
 const mInput={width:"100%",padding:"9px 12px",borderRadius:8,border:"1.5px solid #e0ece6",background:"#f8fbf9",fontSize:13,color:"#1a3028",outline:"none",fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"};
 const mLabel={fontSize:11,fontWeight:600,color:"#8aaa9a",textTransform:"uppercase",letterSpacing:"0.05em",display:"block",marginBottom:4};
 
-const TABS=["Endive","Tasks","Calendar"];
+// ─── ENDIVE INSIGHT ENGINE ──────────────────────────────────────────────────
+function getInsights(tasks, events, categories){
+  const insights=[];
+  const today=new Date();
+  const todayS=todayStr();
+  const in3=new Date(today.getTime()+3*864e5).toISOString().split("T")[0];
+  const in7=new Date(today.getTime()+7*864e5).toISOString().split("T")[0];
+
+  const pending=tasks.filter(t=>!t.done);
+  const urgent=pending.filter(t=>t.date&&t.date<=in3);
+  const thisWeek=pending.filter(t=>t.date&&t.date<=in7);
+
+  // Count events per day this week
+  const dayCounts={};
+  events.forEach(e=>{
+    const d=e.start.split("T")[0];
+    if(d>=todayS&&d<=in7) dayCounts[d]=(dayCounts[d]||0)+1;
+  });
+  const heavyDays=Object.entries(dayCounts).filter(([,c])=>c>=4).map(([d])=>d);
+
+  // Check for rest blocks today or tomorrow
+  const tomorrow=new Date(today.getTime()+864e5).toISOString().split("T")[0];
+  const hasRestToday=events.some(e=>e.category==="rest"&&e.start.startsWith(todayS));
+  const hasRestTomorrow=events.some(e=>e.category==="rest"&&e.start.startsWith(tomorrow));
+
+  // No rest block today
+  if(!hasRestToday&&new Date().getHours()<18){
+    insights.push({type:"rest",msg:"No rest block scheduled today. Want Endive to add one?",action:"Add a rest block today"});
+  }
+
+  // Heavy days coming up
+  if(heavyDays.length>0){
+    const d=new Date(heavyDays[0]+"T12:00:00");
+    const label=d.toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"});
+    insights.push({type:"heavy",msg:`${label} looks packed. Want Endive to rebalance?`,action:"Rebalance that day"});
+  }
+
+  // Many urgent tasks
+  if(urgent.length>=3){
+    insights.push({type:"urgent",msg:`${urgent.length} things due in the next 3 days. Want a focused plan?`,action:"Make a plan for this week"});
+  }
+
+  // Tasks with no time block on calendar
+  const unscheduled=pending.filter(t=>t.date&&!events.some(e=>e.isTask&&e.taskId===t.id)&&t.date>=todayS&&t.date<=in7);
+  if(unscheduled.length>0){
+    insights.push({type:"unscheduled",msg:`${unscheduled.length} task${unscheduled.length>1?"s are":" is"} due this week with no time blocked.`,action:"Schedule them now"});
+  }
+
+  return insights.slice(0,2); // max 2 nudges at a time
+}
+
+const INSIGHT_COLORS={
+  rest:{bg:"#f3eaf8",border:"#b07db8",color:"#7a4a8a",icon:"😴"},
+  heavy:{bg:"#fceee8",border:"#e07b5a",color:"#a04a2a",icon:"⚡"},
+  urgent:{bg:"#fdf3e0",border:"#e8a838",color:"#8a5a10",icon:"🔥"},
+  unscheduled:{bg:"#e8eef8",border:"#6c8ebf",color:"#2a4a8a",icon:"📅"},
+};
+
+function InsightStrip({tasks,events,onAction}){
+  const insights=getInsights(tasks,events);
+  if(insights.length===0) return null;
+  return(
+    <div style={{marginBottom:14}}>
+      {insights.map((ins,i)=>{
+        const style=INSIGHT_COLORS[ins.type]||INSIGHT_COLORS.rest;
+        return(
+          <div key={i} style={{background:style.bg,border:`1px solid ${style.border}`,borderRadius:10,padding:"9px 12px",marginBottom:6,display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:16,flexShrink:0}}>{style.icon}</span>
+            <span style={{flex:1,fontSize:12,color:style.color,lineHeight:1.4}}>{ins.msg}</span>
+            <button onClick={()=>onAction(ins.action)} style={{fontSize:11,fontWeight:600,color:style.color,background:"#fff",border:`1px solid ${style.border}`,borderRadius:6,padding:"4px 8px",cursor:"pointer",flexShrink:0,fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>Ask Endive</button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const TABS=["Endive","My Plan","My Calendar"];
 
 // ─── APP ─────────────────────────────────────────────────────────────────────
 export default function App(){
@@ -576,6 +806,12 @@ export default function App(){
   const [events,setEvents]=useState([]);
   const [categories,setCategories]=useState(DEFAULT_CATEGORIES);
   const [tab,setTab]=useState("Endive");
+  const [pendingAction,setPendingAction]=useState(null);
+
+  const handleEndiveAction=(action)=>{
+    setPendingAction(action);
+    setTab("Endive");
+  };
 
   const today=new Date();
   const h=today.getHours();
@@ -622,9 +858,9 @@ export default function App(){
               ))}
             </div>
             <div style={{padding:18,minHeight:tab==="Endive"?500:"auto",display:"flex",flexDirection:"column"}}>
-              {tab==="Tasks"&&<TasksTab tasks={tasks} setTasks={setTasks} categories={categories}/>}
-              {tab==="Calendar"&&<CalendarTab events={events} setEvents={setEvents} categories={categories} setCategories={setCategories} tasks={tasks} setTasks={setTasks}/>}
-              {tab==="Endive"&&<ChatTab tasks={tasks} setTasks={setTasks} events={events} setEvents={setEvents} categories={categories}/>}
+              {tab==="My Plan"&&<TasksTab tasks={tasks} setTasks={setTasks} categories={categories} events={events} onEndiveAction={handleEndiveAction}/>}
+              {tab==="My Calendar"&&<CalendarTab events={events} setEvents={setEvents} categories={categories} setCategories={setCategories} tasks={tasks} setTasks={setTasks} onEndiveAction={handleEndiveAction}/>}
+              {tab==="Endive"&&<ChatTab tasks={tasks} setTasks={setTasks} events={events} setEvents={setEvents} categories={categories} pendingAction={pendingAction} clearPendingAction={()=>setPendingAction(null)}/>}
             </div>
           </div>
           <p style={{textAlign:"center",fontSize:11,color:"#aacaba",marginTop:16}}>Endive · your personal assistant 🌿</p>
