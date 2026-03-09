@@ -677,7 +677,6 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
   const [input,setInput]=useState("");
   const [loading,setLoading]=useState(false);
   const [started,setStarted]=useState(false);
-  const [voiceMode,setVoiceMode]=useState(false);
   const [listening,setListening]=useState(false);
   const [muted,setMuted]=useState(true);
   const ref=useRef(null);
@@ -802,28 +801,35 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
         </div>
       )}
 
-      {voiceMode&&(
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#e8f5ef",border:"1px solid #9ad4bc",borderRadius:9,padding:"6px 11px",marginBottom:7}}>
-          <span style={{fontSize:12,color:"#2a6a4a",fontWeight:600}}>🎙️ Voice Mode on — hold mic to speak</span>
-          <button onClick={()=>{setVoiceMode(false);setMuted(true);window.speechSynthesis.cancel();}} style={{fontSize:11,color:"#5a8a6a",background:"none",border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Turn off</button>
-        </div>
-      )}
-
       <div style={{display:"flex",gap:6,alignItems:"center"}}>
-        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMsg()} placeholder={listening?"Listening...":voiceMode?"Hold mic or type...":"Message Endive..."} style={{...S.input,flex:1,background:listening?"#e8f5ef":"#f8fbf9"}}/>
-        {voiceMode?(
-          <button onMouseDown={startListening} onMouseUp={stopListening} onTouchStart={e=>{e.preventDefault();startListening();}} onTouchEnd={e=>{e.preventDefault();stopListening();}} style={{...S.iconBtn,background:listening?"#e07b5a":"#4a9e7a",position:"relative"}}>
-            {listening?<span style={{fontSize:13}}>⏹</span>:<MicIcon/>}
-            {listening&&<span style={{position:"absolute",top:-3,right:-3,width:8,height:8,borderRadius:"50%",background:"#e07b5a",animation:"pulse 1s infinite"}}/>}
-          </button>
-        ):(
-          <button onClick={()=>{setVoiceMode(true);setMuted(false);}} style={{...S.iconBtn,background:"#f0f7f2",border:"1.5px solid #9ad4bc"}} title="Turn on Voice Mode">
-            <MicIcon color="#4a9e7a"/>
-          </button>
-        )}
+        <input
+          value={input}
+          onChange={e=>setInput(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&sendMsg()}
+          placeholder={listening?"Listening...":"Message Endive..."}
+          style={{...S.input,flex:1,background:listening?"#e8f5ef":"#f8fbf9",transition:"background 0.2s"}}
+        />
+        {/* Unified voice button — tap to speak & hear Endive back */}
+        <button
+          onMouseDown={()=>{setMuted(false);startListening();}}
+          onMouseUp={stopListening}
+          onTouchStart={e=>{e.preventDefault();setMuted(false);startListening();}}
+          onTouchEnd={e=>{e.preventDefault();stopListening();}}
+          title="Hold to talk — Endive will speak back"
+          style={{width:44,height:40,borderRadius:10,background:listening?"#1a3028":"transparent",border:`1.5px solid ${listening?"#4a9e7a":"#c8dcd4"}`,display:"flex",alignItems:"center",justifyContent:"center",gap:2,cursor:"pointer",flexShrink:0,transition:"all 0.2s",padding:"0 8px"}}>
+          {[3,5,7,5,3].map((h,i)=>(
+            <span key={i} style={{
+              width:3,height:h+(listening?Math.sin(Date.now()/200+i)*4:0),borderRadius:2,
+              background:listening?"#4a9e7a":"#a0bcb4",
+              display:"block",flexShrink:0,
+              animation:listening?`wave 0.8s ease-in-out infinite`:"none",
+              animationDelay:`${i*0.1}s`,
+              transition:"height 0.2s"
+            }}/>
+          ))}
+        </button>
         <button onClick={()=>sendMsg()} disabled={loading} style={{...S.iconBtn,background:loading?"#b2d2be":"#4a9e7a",fontSize:17}}>→</button>
       </div>
-      {!voiceMode&&<p style={{fontSize:11,color:"#aacaba",textAlign:"center",marginTop:5}}>Tap the mic to turn on Voice Mode</p>}
     </div>
   );
 }
@@ -862,6 +868,7 @@ export default function App(){
         body{background:#eef7f2;min-height:100vh;}
         @keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
         @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes wave{0%,100%{transform:scaleY(1)}50%{transform:scaleY(2.2)}}
         select{-webkit-appearance:none;}
         input[type="date"]::-webkit-calendar-picker-indicator{opacity:0.4;cursor:pointer;}
         ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#c2dece;border-radius:4px}
