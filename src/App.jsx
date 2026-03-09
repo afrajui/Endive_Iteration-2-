@@ -560,21 +560,29 @@ function ChatTab({tasks,setTasks,events,setEvents,categories,pendingAction,clear
   const [loading,setLoading]=useState(false);
   const [started,setStarted]=useState(false);
   const [listening,setListening]=useState(false);
-  const [muted,setMuted]=useState(false);
+  const [muted,setMuted]=useState(true);
+  const [voiceMode,setVoiceMode]=useState(false);
   const ref=useRef(null);
   const recognitionRef=useRef(null);
 
   const speak=(text)=>{
     if(muted) return;
     window.speechSynthesis.cancel();
-    const clean=text.replace(/[*_#]/g,"").replace(/```[\s\S]*?```/g,"").trim();
-    const utt=new SpeechSynthesisUtterance(clean);
-    utt.rate=0.95; utt.pitch=1.05; utt.volume=1;
-    // Pick a warm female voice if available
-    const voices=window.speechSynthesis.getVoices();
-    const preferred=voices.find(v=>/samantha|karen|moira|fiona|victoria|zira|google us english/i.test(v.name));
-    if(preferred) utt.voice=preferred;
-    window.speechSynthesis.speak(utt);
+    const cleaned=text.replace(/[*_#]/g,"").replace(/```[\s\S]*?```/g,"").replace(/[\u{1F300}-\u{1F9FF}]/gu,"").trim();
+    const utt=new SpeechSynthesisUtterance(cleaned);
+    utt.rate=0.88; utt.pitch=1.0; utt.volume=0.95;
+    const trySpeak=()=>{
+      const voices=window.speechSynthesis.getVoices();
+      // Prefer warm natural voices — Samantha (macOS), Karen (AU), Moira (IE), Google US English
+      const preferred=voices.find(v=>/^samantha$|^karen$|^moira$|google us english/i.test(v.name));
+      const fallback=voices.find(v=>v.lang==="en-US"&&v.localService);
+      if(preferred) utt.voice=preferred;
+      else if(fallback) utt.voice=fallback;
+      window.speechSynthesis.speak(utt);
+    };
+    // Voices may not be loaded yet
+    if(window.speechSynthesis.getVoices().length>0) trySpeak();
+    else window.speechSynthesis.onvoiceschanged=trySpeak;
   };
 
   const startListening=()=>{
@@ -688,23 +696,39 @@ function ChatTab({tasks,setTasks,events,setEvents,categories,pendingAction,clear
           {quick.map(p=><button key={p} onClick={()=>sendText(p)} style={{padding:"6px 11px",borderRadius:20,border:"1.5px solid #c2dece",background:"#f0f7f2",color:"#3a7a5a",fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{p}</button>)}
         </div>
       )}
+      {/* Voice mode banner */}
+      {voiceMode&&(
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#e8f5ef",border:"1px solid #9ad4bc",borderRadius:10,padding:"7px 12px",marginBottom:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:13}}>🎙️</span>
+            <span style={{fontSize:12,color:"#2a6a4a",fontWeight:600}}>Voice Mode — Endive is listening</span>
+          </div>
+          <button onClick={()=>{setVoiceMode(false);setMuted(true);window.speechSynthesis.cancel();}} style={{fontSize:11,color:"#5a8a6a",background:"none",border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Turn off</button>
+        </div>
+      )}
       <div style={{display:"flex",gap:6,alignItems:"center"}}>
-        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendText()} placeholder={listening?"Listening...":"Talk to Endive..."} style={{...iStyle,flex:1,background:listening?"#e8f5ef":"#f8fbf9"}}/>
-        <button
-          onMouseDown={startListening} onMouseUp={stopListening}
-          onTouchStart={e=>{e.preventDefault();startListening();}} onTouchEnd={e=>{e.preventDefault();stopListening();}}
-          style={{...aBtn,width:42,background:listening?"#e07b5a":"#4a9e7a",fontSize:16,flexShrink:0,position:"relative"}}>
-          {listening
-            ? <span style={{fontSize:14}}>⏹</span>
-            : <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12 1a4 4 0 014 4v7a4 4 0 01-8 0V5a4 4 0 014-4zm6.5 10a.5.5 0 011 0A7.5 7.5 0 0112 18.5V21h3a.5.5 0 010 1H9a.5.5 0 010-1h3v-2.5A7.5 7.5 0 014.5 11a.5.5 0 011 0 6.5 6.5 0 0013 0z"/></svg>
-          }
-          {listening&&<span style={{position:"absolute",top:-3,right:-3,width:8,height:8,borderRadius:"50%",background:"#e07b5a",animation:"pulse 1s infinite"}}/>}
-        </button>
-        <button onClick={()=>sendText()} disabled={loading} style={{...aBtn,width:42,fontSize:17,background:loading?"#b2d2be":"#4a9e7a",flexShrink:0}}>→</button>
-        <button onClick={()=>{setMuted(m=>!m);window.speechSynthesis.cancel();}} style={{...aBtn,width:36,fontSize:14,background:muted?"#e8f2ec":"#4a9e7a",flexShrink:0}} title={muted?"Unmute Endive":"Mute Endive"}>
-          {muted?"🔇":"🔊"}
-        </button>
+        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendText()} placeholder={listening?"Listening...":voiceMode?"Hold 🎙️ or type...":"Message Endive..."} style={{...iStyle,flex:1,background:listening?"#e8f5ef":"#f8fbf9"}}/>
+        {voiceMode?(
+          <button
+            onMouseDown={startListening} onMouseUp={stopListening}
+            onTouchStart={e=>{e.preventDefault();startListening();}} onTouchEnd={e=>{e.preventDefault();stopListening();}}
+            style={{...aBtn,width:44,background:listening?"#e07b5a":"#4a9e7a",flexShrink:0,position:"relative",fontSize:16}}>
+            {listening
+              ? <span style={{fontSize:13}}>⏹</span>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M12 1a4 4 0 014 4v7a4 4 0 01-8 0V5a4 4 0 014-4zm6.5 10a.5.5 0 011 0A7.5 7.5 0 0112 18.5V21h3a.5.5 0 010 1H9a.5.5 0 010-1h3v-2.5A7.5 7.5 0 014.5 11a.5.5 0 011 0 6.5 6.5 0 0013 0z"/></svg>
+            }
+            {listening&&<span style={{position:"absolute",top:-3,right:-3,width:8,height:8,borderRadius:"50%",background:"#e07b5a",animation:"pulse 1s infinite"}}/>}
+          </button>
+        ):(
+          <button onClick={()=>{setVoiceMode(true);setMuted(false);}} style={{...aBtn,width:44,background:"#f0f7f2",flexShrink:0,border:"1.5px solid #9ad4bc"}} title="Turn on Voice Mode">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#4a9e7a"><path d="M12 1a4 4 0 014 4v7a4 4 0 01-8 0V5a4 4 0 014-4zm6.5 10a.5.5 0 011 0A7.5 7.5 0 0112 18.5V21h3a.5.5 0 010 1H9a.5.5 0 010-1h3v-2.5A7.5 7.5 0 014.5 11a.5.5 0 011 0 6.5 6.5 0 0013 0z"/></svg>
+          </button>
+        )}
+        <button onClick={()=>sendText()} disabled={loading} style={{...aBtn,width:44,fontSize:17,background:loading?"#b2d2be":"#4a9e7a",flexShrink:0}}>→</button>
       </div>
+      {!voiceMode&&(
+        <p style={{fontSize:11,color:"#aacaba",textAlign:"center",marginTop:6}}>Tap 🎙️ to turn on Voice Mode — hear Endive speak back</p>
+      )}
     </div>
   );
 }
@@ -717,6 +741,205 @@ const sBtn={padding:"5px 11px",borderRadius:6,border:"none",fontSize:12,fontWeig
 const secLbl={fontSize:11,fontWeight:700,letterSpacing:"0.08em",color:"#8aaa9a",textTransform:"uppercase",marginBottom:3};
 const mInput={width:"100%",padding:"9px 12px",borderRadius:8,border:"1.5px solid #e0ece6",background:"#f8fbf9",fontSize:13,color:"#1a3028",outline:"none",fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"};
 const mLabel={fontSize:11,fontWeight:600,color:"#8aaa9a",textTransform:"uppercase",letterSpacing:"0.05em",display:"block",marginBottom:4};
+
+
+// ─── ONBOARDING ──────────────────────────────────────────────────────────────
+const TIME_STYLES=[
+  {id:"timeblocking", label:"Time Blocking", desc:"Schedule every hour intentionally"},
+  {id:"pomodoro",     label:"Pomodoro",      desc:"25 min focus, 5 min break cycles"},
+  {id:"eat_the_frog", label:"Eat the Frog",  desc:"Hardest task first every morning"},
+  {id:"getting_done", label:"Getting Things Done", desc:"Capture, clarify, organize, reflect"},
+  {id:"flowing",      label:"Go with the Flow", desc:"Flexible, respond to how you feel"},
+];
+
+const YEAR_OPTIONS=["Freshman","Sophomore","Junior","Senior","Grad Student","Other"];
+const STRESS_OPTIONS=["Classes & studying","Work or internship","Social life & relationships","Family responsibilities","Finances","Health & sleep","Extracurriculars","All of the above"];
+const GOAL_OPTIONS=["Reduce stress & burnout","Stay on top of deadlines","Build better habits","Balance school & personal life","Improve focus & productivity","Feel more in control"];
+
+function OnboardingForm({onComplete}){
+  const [step,setStep]=useState(0);
+  const [data,setData]=useState({
+    name:"", year:"", stressors:[], commitments:"",
+    sleepTime:"22", wakeTime:"7", goals:[], timeStyle:""
+  });
+  const [animating,setAnimating]=useState(false);
+
+  const next=()=>{
+    setAnimating(true);
+    setTimeout(()=>{setStep(s=>s+1);setAnimating(false);},250);
+  };
+  const back=()=>{
+    setAnimating(true);
+    setTimeout(()=>{setStep(s=>s-1);setAnimating(false);},250);
+  };
+
+  const toggle=(field,val)=>setData(p=>({
+    ...p,[field]:p[field].includes(val)?p[field].filter(x=>x!==val):[...p[field],val]
+  }));
+
+  const canNext=()=>{
+    if(step===0) return data.name.trim().length>0;
+    if(step===1) return data.year!=="";
+    if(step===2) return data.stressors.length>0;
+    if(step===3) return data.commitments.trim().length>0||true; // optional
+    if(step===4) return true;
+    if(step===5) return data.goals.length>0;
+    if(step===6) return data.timeStyle!=="";
+    return true;
+  };
+
+  const steps=[
+    // 0 - Name
+    <div key="name">
+      <div style={olEmoji}>👋</div>
+      <h2 style={olTitle}>Hi! I'm Endive.</h2>
+      <p style={olSub}>Your personal burnout-prevention assistant. Let's get you set up — it takes about 2 minutes.</p>
+      <label style={olLabel}>What's your name?</label>
+      <input autoFocus value={data.name} onChange={e=>setData(p=>({...p,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&canNext()&&next()} placeholder="Your first name..." style={olInput}/>
+    </div>,
+
+    // 1 - Year
+    <div key="year">
+      <div style={olEmoji}>🎓</div>
+      <h2 style={olTitle}>Hey, {data.name}!</h2>
+      <p style={olSub}>What year are you in?</p>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:4}}>
+        {YEAR_OPTIONS.map(y=>(
+          <button key={y} onClick={()=>setData(p=>({...p,year:y}))} style={{...olChip,background:data.year===y?"#4a9e7a":"#f0f7f2",color:data.year===y?"#fff":"#3a6a4a",border:`1.5px solid ${data.year===y?"#4a9e7a":"#c2dece"}`}}>{y}</button>
+        ))}
+      </div>
+    </div>,
+
+    // 2 - Stressors
+    <div key="stress">
+      <div style={olEmoji}>💭</div>
+      <h2 style={olTitle}>What weighs on you most?</h2>
+      <p style={olSub}>Select everything that applies — no judgment here.</p>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:4}}>
+        {STRESS_OPTIONS.map(s=>{
+          const sel=data.stressors.includes(s);
+          return<button key={s} onClick={()=>toggle("stressors",s)} style={{...olChip,background:sel?"#e07b5a":"#f0f7f2",color:sel?"#fff":"#3a6a4a",border:`1.5px solid ${sel?"#e07b5a":"#c2dece"}`}}>{s}</button>;
+        })}
+      </div>
+    </div>,
+
+    // 3 - Recurring commitments
+    <div key="commitments">
+      <div style={olEmoji}>🗓️</div>
+      <h2 style={olTitle}>Recurring commitments</h2>
+      <p style={olSub}>What repeats every week? Classes, work shifts, gym, clubs... Endive will build around these.</p>
+      <textarea value={data.commitments} onChange={e=>setData(p=>({...p,commitments:e.target.value}))} placeholder={"e.g. BIO 101 MWF 10-11am\nWork Tue/Thu 3-6pm\nGym Mon/Wed 7am"} style={{...olInput,height:100,resize:"none",lineHeight:1.6}}/>
+      <p style={{fontSize:11,color:"#8aaa9a",marginTop:6}}>Optional — you can always tell Endive later.</p>
+    </div>,
+
+    // 4 - Sleep schedule
+    <div key="sleep">
+      <div style={olEmoji}>😴</div>
+      <h2 style={olTitle}>Your sleep schedule</h2>
+      <p style={olSub}>Endive won't schedule anything during your sleep. Ever.</p>
+      <div style={{display:"flex",gap:16,marginTop:8}}>
+        <div style={{flex:1}}>
+          <label style={olLabel}>Bedtime</label>
+          <select value={data.sleepTime} onChange={e=>setData(p=>({...p,sleepTime:e.target.value}))} style={olInput}>
+            {Array.from({length:24},(_,i)=><option key={i} value={i}>{fmtHour(i)}</option>)}
+          </select>
+        </div>
+        <div style={{flex:1}}>
+          <label style={olLabel}>Wake up</label>
+          <select value={data.wakeTime} onChange={e=>setData(p=>({...p,wakeTime:e.target.value}))} style={olInput}>
+            {Array.from({length:24},(_,i)=><option key={i} value={i}>{fmtHour(i)}</option>)}
+          </select>
+        </div>
+      </div>
+    </div>,
+
+    // 5 - Goals
+    <div key="goals">
+      <div style={olEmoji}>🌱</div>
+      <h2 style={olTitle}>What do you want from Endive?</h2>
+      <p style={olSub}>Pick everything that resonates.</p>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:4}}>
+        {GOAL_OPTIONS.map(g=>{
+          const sel=data.goals.includes(g);
+          return<button key={g} onClick={()=>toggle("goals",g)} style={{...olChip,background:sel?"#7c6fcd":"#f0f7f2",color:sel?"#fff":"#3a6a4a",border:`1.5px solid ${sel?"#7c6fcd":"#c2dece"}`}}>{g}</button>;
+        })}
+      </div>
+    </div>,
+
+    // 6 - Time management style
+    <div key="style">
+      <div style={olEmoji}>⏱️</div>
+      <h2 style={olTitle}>How do you like to work?</h2>
+      <p style={olSub}>Endive will plan around your style. You can always change this later.</p>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:4}}>
+        {TIME_STYLES.map(ts=>{
+          const sel=data.timeStyle===ts.id;
+          return(
+            <button key={ts.id} onClick={()=>setData(p=>({...p,timeStyle:ts.id}))} style={{padding:"10px 14px",borderRadius:10,border:`1.5px solid ${sel?"#4a9e7a":"#c2dece"}`,background:sel?"#e8f5ef":"#f8fbf9",textAlign:"left",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+              <div style={{fontWeight:600,fontSize:13,color:sel?"#2a6a4a":"#1a3028"}}>{ts.label}</div>
+              <div style={{fontSize:11,color:"#8aaa9a",marginTop:2}}>{ts.desc}</div>
+            </button>
+          );
+        })}
+      </div>
+    </div>,
+
+    // 7 - Done
+    <div key="done" style={{textAlign:"center",padding:"10px 0"}}>
+      <div style={{fontSize:52,marginBottom:12}}>🌿</div>
+      <h2 style={{...olTitle,textAlign:"center"}}>You're all set, {data.name}!</h2>
+      <p style={{...olSub,textAlign:"center"}}>Endive knows what matters to you now. Let's build something sustainable together.</p>
+      <div style={{background:"#e8f5ef",borderRadius:12,padding:"12px 16px",marginTop:16,textAlign:"left"}}>
+        <div style={{fontSize:12,color:"#4a9e7a",fontWeight:600,marginBottom:6}}>Endive will remember:</div>
+        {[
+          `You're a ${data.year.toLowerCase()}`,
+          `Your style: ${TIME_STYLES.find(t=>t.id===data.timeStyle)?.label||"flexible"}`,
+          `Bedtime at ${fmtHour(+data.sleepTime)}, up at ${fmtHour(+data.wakeTime)}`,
+          data.commitments?`${data.commitments.split("\n").filter(Boolean).length} recurring commitment(s)`:null,
+        ].filter(Boolean).map((item,i)=>(
+          <div key={i} style={{fontSize:12,color:"#2a5a3a",padding:"3px 0",display:"flex",gap:6}}>
+            <span style={{color:"#4a9e7a"}}>✓</span>{item}
+          </div>
+        ))}
+      </div>
+    </div>
+  ];
+
+  const isLast=step===steps.length-1;
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"#eef7f2",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16}}>
+      <div style={{width:"100%",maxWidth:440,background:"#fff",borderRadius:24,boxShadow:"0 4px 40px rgba(26,48,40,0.12)",padding:28,opacity:animating?0:1,transform:animating?"translateY(8px)":"translateY(0)",transition:"all 0.25s ease"}}>
+        {/* Progress dots */}
+        <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:24}}>
+          {steps.map((_,i)=>(
+            <div key={i} style={{width:i===step?20:6,height:6,borderRadius:3,background:i<=step?"#4a9e7a":"#e0ece6",transition:"all 0.3s ease"}}/>
+          ))}
+        </div>
+
+        <div style={{minHeight:280}}>{steps[step]}</div>
+
+        <div style={{display:"flex",gap:8,marginTop:24}}>
+          {step>0&&<button onClick={back} style={{flex:1,padding:"11px 0",borderRadius:10,border:"1.5px solid #e0ece6",background:"#fff",color:"#8aaa9a",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:14}}>← Back</button>}
+          <button
+            onClick={isLast?()=>onComplete(data):next}
+            disabled={!canNext()}
+            style={{flex:2,padding:"11px 0",borderRadius:10,border:"none",background:canNext()?"#4a9e7a":"#c2dece",color:"#fff",fontWeight:600,cursor:canNext()?"pointer":"default",fontFamily:"'DM Sans',sans-serif",fontSize:14,transition:"background 0.2s"}}>
+            {isLast?"Start with Endive 🌿":"Continue →"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Onboarding styles
+const olEmoji={fontSize:36,marginBottom:10};
+const olTitle={fontFamily:"'Lora',serif",fontSize:20,fontWeight:600,color:"#1a3028",marginBottom:6};
+const olSub={fontSize:13,color:"#6a9a7a",marginBottom:14,lineHeight:1.6};
+const olLabel={fontSize:11,fontWeight:600,color:"#8aaa9a",textTransform:"uppercase",letterSpacing:"0.05em",display:"block",marginBottom:6};
+const olInput={width:"100%",padding:"10px 12px",borderRadius:8,border:"1.5px solid #c2dece",background:"#f8fbf9",fontSize:13,color:"#1a3028",outline:"none",fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"};
+const olChip={padding:"7px 14px",borderRadius:20,fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"};
 
 // ─── ENDIVE INSIGHT ENGINE ──────────────────────────────────────────────────
 function getInsights(tasks, events, categories){
@@ -799,14 +1022,18 @@ const TABS=["Endive","My Plan","My Calendar"];
 
 // ─── APP ─────────────────────────────────────────────────────────────────────
 export default function App(){
-  const [tasks,setTasks]=useState([
-    {id:1,text:"Review project proposal",done:false,date:todayStr(),category:"work",quadrant:null},
-    {id:2,text:"Book dentist appointment",done:false,date:null,category:"personal",quadrant:null},
-  ]);
+  const [userProfile,setUserProfile]=useState(null); // null = show onboarding
+  const [tasks,setTasks]=useState([]);
   const [events,setEvents]=useState([]);
   const [categories,setCategories]=useState(DEFAULT_CATEGORIES);
   const [tab,setTab]=useState("Endive");
   const [pendingAction,setPendingAction]=useState(null);
+
+  const completeOnboarding=(profile)=>{
+    setUserProfile(profile);
+    // Pre-fill pending action so Endive greets with context
+    setPendingAction(\`My name is \${profile.name}, I'm a \${profile.year}. My main stressors are: \${profile.stressors.join(", ")}. My recurring commitments: \${profile.commitments||"none yet"}. I sleep around \${fmtHour(+profile.sleepTime)} and wake at \${fmtHour(+profile.wakeTime)}. My goals: \${profile.goals.join(", ")}. My preferred time management style is \${TIME_STYLES.find(t=>t.id===profile.timeStyle)?.label||"flexible"}. Please greet me warmly by name and let me know you've got everything you need to help me.\`);
+  };
 
   const handleEndiveAction=(action)=>{
     setPendingAction(action);
@@ -849,6 +1076,7 @@ export default function App(){
             )}
           </div>
 
+          {!userProfile&&<OnboardingForm onComplete={completeOnboarding}/>}
           <div style={{background:"#fff",borderRadius:20,boxShadow:"0 2px 28px rgba(26,48,40,0.08)",overflow:"hidden"}}>
             <div style={{display:"flex",borderBottom:"1px solid #e8f2ec"}}>
               {TABS.map(t=>(
