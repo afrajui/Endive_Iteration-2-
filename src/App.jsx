@@ -809,22 +809,25 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
           placeholder={listening?"Listening...":"Message Endive..."}
           style={{...S.input,flex:1,background:listening?"#e8f5ef":"#f8fbf9",transition:"background 0.2s"}}
         />
-        {/* Unified voice button — tap to speak & hear Endive back */}
+        {/* Unified voice button — hold to talk, Endive speaks back */}
         <button
           onMouseDown={()=>{setMuted(false);startListening();}}
           onMouseUp={stopListening}
           onTouchStart={e=>{e.preventDefault();setMuted(false);startListening();}}
           onTouchEnd={e=>{e.preventDefault();stopListening();}}
           title="Hold to talk — Endive will speak back"
-          style={{width:44,height:40,borderRadius:10,background:listening?"#1a3028":"transparent",border:`1.5px solid ${listening?"#4a9e7a":"#c8dcd4"}`,display:"flex",alignItems:"center",justifyContent:"center",gap:2,cursor:"pointer",flexShrink:0,transition:"all 0.2s",padding:"0 8px"}}>
-          {[3,5,7,5,3].map((h,i)=>(
+          style={{width:48,height:40,borderRadius:10,background:listening?"#1a3028":"transparent",border:`1.5px solid ${listening?"#4a9e7a":"#c8dcd4"}`,display:"flex",alignItems:"center",justifyContent:"center",gap:2,cursor:"pointer",flexShrink:0,transition:"all 0.25s",padding:"0 9px"}}>
+          {[3,5,8,5,3].map((h,i)=>(
             <span key={i} style={{
-              width:3,height:h+(listening?Math.sin(Date.now()/200+i)*4:0),borderRadius:2,
+              width:3,
+              height:h,
+              borderRadius:2,
               background:listening?"#4a9e7a":"#a0bcb4",
-              display:"block",flexShrink:0,
-              animation:listening?`wave 0.8s ease-in-out infinite`:"none",
-              animationDelay:`${i*0.1}s`,
-              transition:"height 0.2s"
+              display:"block",
+              flexShrink:0,
+              transformOrigin:"center",
+              animation:listening?`wave 0.7s ease-in-out infinite`:"none",
+              animationDelay:`${i*0.12}s`,
             }}/>
           ))}
         </button>
