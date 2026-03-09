@@ -490,7 +490,13 @@ When scheduling any block (including breaks), embed at END of reply:
 
 Always include break and rest blocks alongside work blocks in any plan.
 You can include multiple task and event blocks in one reply. Never show raw JSON to the user.
-Keep replies concise and warm. If off-topic, gently redirect.`;
+## Response Style Rules (critical)
+- Keep ALL replies SHORT — max 3-4 sentences or a brief bullet list
+- No long paragraphs. Ever.
+- Use line breaks and short bullets over dense text
+- Save the detail for the plan itself, not the chat message
+- If you need to ask something, ask ONE question at a time
+- Emojis are ok sparingly to add warmth, not decoration`;
 
 function parseB(text,tag){
   return[...text.matchAll(new RegExp("```"+tag+"\\n([\\s\\S]*?)```","g"))].map(m=>{try{return JSON.parse(m[1]);}catch{return null;}}).filter(Boolean);
