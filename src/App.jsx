@@ -755,12 +755,13 @@ PLANNING RULES (follow every time you build a schedule):
 - If the day looks too full, say so and redistribute
 - Check in emotionally before diving into planning — a quick "how are you feeling?" first
 
-TIME FORMAT RULES (critical):
-- ALL times in EVENT_JSON must be the user's LOCAL time, not UTC.
-- "Due by 12AM tonight" means the deadline is 11:59PM that same night — schedule a work block BEFORE it, like 8PM-10PM, not AT midnight.
-- "Class from 1-2PM Monday" → start: "YYYY-MM-DDT13:00:00", end: "YYYY-MM-DDT14:00:00" for that Monday's date.
-- Never output T00:00:00 for an event start unless the user explicitly says "midnight". Midnight means the very end of the day, not the beginning.
-- When scheduling around a deadline, create a WORK block ending 30-60 min before the deadline, not at the deadline time itself.
+TIME FORMAT RULES (critical — follow exactly):
+- Use the TODAY'S DATE FOR JSON value provided in context for today's date in all EVENT_JSON fields.
+- Times must match what the user says in LOCAL time. "1PM" = T13:00:00. "9AM" = T09:00:00. "10PM" = T22:00:00.
+- NEVER add or subtract hours from what the user states. If they say 1PM, write T13:00:00. Do not convert to UTC.
+- "Due by 12AM tonight" = deadline is 11:59PM tonight. Schedule a work block BEFORE it (e.g. 9PM-11PM), not AT midnight.
+- "Class 1-2PM Monday" → find next Monday's date, output start: "YYYY-MM-DDT13:00:00", end: "YYYY-MM-DDT14:00:00".
+- Never use T00:00:00 as an event start unless user explicitly says "starting at midnight".
 
 DUPLICATE PREVENTION: Never add an event or task that already exists in the user's context. Check the existing tasks and calendar blocks before outputting any JSON.
 
@@ -835,13 +836,18 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
 
   const ctx=()=>{
     const tz=Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const now=new Date().toLocaleString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true});
+    const now=new Date();
+    const nowStr=now.toLocaleString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true});
+    // Explicit local date for AI to use in EVENT_JSON — avoids UTC confusion
+    const localDate=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+    const localHour=now.getHours();
     const recurEvents=events.filter(e=>e.isRecurring).slice(0,10).map(e=>`- ${e.title} [${e.category}] ${e.start}`).join("\n");
     const taskList=tasks.length>0?tasks.map(t=>`- [${t.done?"✓":"○"}] ${t.text}${t.date?` due:${t.date}`:""} [${t.category}]`).join("\n"):"No tasks.";
     const evList=events.filter(e=>!e.isRecurring).slice(-5).map(e=>`- ${e.title} ${e.start.split("T")[0]} [${e.category}]`).join("\n");
     const p=profile?`Student: ${profile.name}, ${profile.year}. Stressors: ${profile.stressors?.join(", ")}. Style: ${TIME_STYLES.find(ts=>ts.id===profile.timeStyle)?.label||"flexible"}. Bedtime: ${fmtH(profile.sleepH||22)}, Wake: ${fmtH(profile.wakeH||7)}.`:"";
     return[
-      `Current time: ${now} (${tz})`,
+      `Current local time: ${nowStr} (timezone: ${tz})`,
+      `TODAY'S DATE FOR JSON: ${localDate} — use this exact date string in EVENT_JSON start/end fields for today's events. Current local hour: ${localHour} (24h). All times in EVENT_JSON must be LOCAL time, not UTC.`,
       p,
       recurEvents?`Recurring commitments:\n${recurEvents}`:"",
       `Tasks:\n${taskList}`,
