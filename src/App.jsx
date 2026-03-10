@@ -864,7 +864,7 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
   };
 
   const call=async(m)=>{
-    const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,system:SYS+"\n\n"+ctx(),messages:m.map(x=>({role:x.role,content:x.content}))})});
+    const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:450,system:SYS+"\n\n"+ctx(),messages:m.map(x=>({role:x.role,content:x.content}))})});
     return res.json();
   };
 
@@ -894,8 +894,8 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
     try{
       const data=await call(nm);
       const raw=data.content?.map(b=>b.text||"").join("")||"Sorry, something went wrong.";
-      // Parse all blocks first before any state updates
-      const{events:ne,tasks:nt}=parseBlocks(raw);
+      let ne=[],nt=[];
+      try{const parsed=parseBlocks(raw);ne=parsed.events;nt=parsed.tasks;}catch(e){}
       const txt=cleanText(raw);
       // Update events — deduplicate by title + date
       if(ne.length>0){
