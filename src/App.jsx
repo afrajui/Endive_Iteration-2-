@@ -558,31 +558,39 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
 
       {/* Day */}
       {view==="day"&&(
-        <div style={{maxHeight:450,overflowY:"auto"}}>
-          {HOURS.map(h=>{
+        <div style={{maxHeight:450,overflowY:"auto",position:"relative"}}>
+          {/* Hour grid rows */}
+          {HOURS.map(h=>(
+            <div key={h} style={{display:"flex",gap:8,height:56,borderTop:"1px solid #f0f5f2",paddingTop:3}}>
+              <div style={{width:40,fontSize:10,color:"#bbb",flexShrink:0,textAlign:"right"}}>{fmtH(h)}</div>
+              <div style={{flex:1}}/>
+            </div>
+          ))}
+          {/* Overlay events spanning their full duration */}
+          {(()=>{
             const dk2=dkey(cur.y,cur.m,cur.d);
-            const slotEvs=allBlocks.filter(e=>e.start.startsWith(dk2)&&parseInt(e.start.split("T")[1]||"0")===h);
-            return(
-              <div key={h} style={{display:"flex",gap:8,minHeight:44,borderTop:"1px solid #f0f5f2",paddingTop:3}}>
-                <div style={{width:40,fontSize:10,color:"#bbb",flexShrink:0,textAlign:"right"}}>{fmtH(h)}</div>
-                <div style={{flex:1,display:"flex",flexWrap:"wrap",gap:4}}>
-                  {slotEvs.map(ev=>{
-                    const cat=cats.find(c=>c.id===ev.category)||cats[3];
-                    const eh=ev.end?parseInt(ev.end.split("T")[1]||String(h+1)):h+1;
-                    return(
-                      <div key={ev.id} onClick={ev.isTask?()=>setEditT({tid:ev.taskId,sh:parseInt(ev.start.split("T")[1]||"9"),eh}):undefined} style={{padding:"5px 9px",borderRadius:8,background:cat.bg,borderLeft:`3px solid ${cat.color}`,fontSize:12,color:"#1a3028",flex:1,minWidth:110,cursor:ev.isTask?"pointer":"default"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                          <span style={{fontWeight:600,flex:1}}>{ev.isTask?"📌 ":ev.isRecurring?"🔁 ":""}{ev.title}{ev.isTask&&<span style={{fontSize:9,opacity:0.5,marginLeft:4}}>tap to edit</span>}</span>
-                          {!ev.isTask&&<button onClick={e=>{e.stopPropagation();ev.recurId?setEvents(p=>p.filter(x=>x.recurId!==ev.recurId)):setEvents(p=>p.filter(x=>x.id!==ev.id));}} style={{background:"none",border:"none",color:"#ccc",cursor:"pointer",fontSize:14,lineHeight:1,padding:0}}>×</button>}
-                        </div>
-                        <div style={{fontSize:10,color:cat.color,marginTop:1}}>{pad(h)}:00 – {pad(eh)}:00</div>
-                      </div>
-                    );
-                  })}
+            const dayEvs=allBlocks.filter(e=>e.start.startsWith(dk2));
+            return dayEvs.map(ev=>{
+              const cat=cats.find(c=>c.id===ev.category)||cats[3];
+              const sh=parseInt(ev.start.split("T")[1]||"0");
+              const eh=ev.end?parseInt(ev.end.split("T")[1]||String(sh+1)):sh+1;
+              const duration=Math.max(eh-sh,1);
+              const topOffset=HOURS.indexOf(sh)*56+4;
+              const blockHeight=duration*56-6;
+              if(HOURS.indexOf(sh)<0)return null;
+              return(
+                <div key={ev.id}
+                  onClick={ev.isTask?()=>setEditT({tid:ev.taskId,sh,eh}):undefined}
+                  style={{position:"absolute",left:52,right:8,top:topOffset,height:blockHeight,padding:"5px 9px",borderRadius:8,background:cat.bg,borderLeft:`3px solid ${cat.color}`,fontSize:12,color:"#1a3028",cursor:ev.isTask?"pointer":"default",overflow:"hidden",zIndex:1}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                    <span style={{fontWeight:600,flex:1}}>{ev.isTask?"📌 ":ev.isRecurring?"🔁 ":""}{ev.title}</span>
+                    {!ev.isTask&&<button onClick={e=>{e.stopPropagation();ev.recurId?setEvents(p=>p.filter(x=>x.recurId!==ev.recurId)):setEvents(p=>p.filter(x=>x.id!==ev.id));}} style={{background:"none",border:"none",color:"#ccc",cursor:"pointer",fontSize:14,lineHeight:1,padding:0}}>×</button>}
+                  </div>
+                  <div style={{fontSize:10,color:cat.color,marginTop:1}}>{fmtTime(ev.start)}{ev.end&&` – ${fmtTime(ev.end)}`}</div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
       )}
 
