@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────────────
 const DAYS_S=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
 const MONTHS_S=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -23,24 +23,28 @@ const QUADS=[
 ];
 
 const TIME_STYLES=[
-  {id:"timeblocking", label:"Time Blocking",       desc:"Schedule every hour intentionally"},
-  {id:"pomodoro",     label:"Pomodoro",             desc:"25 min focus, 5 min break cycles"},
-  {id:"eat_frog",     label:"Eat the Frog",         desc:"Hardest task first every morning"},
-  {id:"gtd",          label:"Getting Things Done",  desc:"Capture, clarify, organize, reflect"},
-  {id:"flowing",      label:"Go with the Flow",     desc:"Flexible, respond to how you feel"},
+  {id:"timeblocking",label:"Time Blocking",      desc:"Schedule every hour intentionally"},
+  {id:"pomodoro",    label:"Pomodoro",            desc:"25 min focus, 5 min break cycles"},
+  {id:"eat_frog",    label:"Eat the Frog",        desc:"Hardest task first every morning"},
+  {id:"gtd",         label:"Getting Things Done", desc:"Capture, clarify, organize, reflect"},
+  {id:"flowing",     label:"Go with the Flow",    desc:"Flexible, respond to how you feel"},
 ];
 
 const STRESS_OPTS=["Classes & studying","Work or internship","Social life","Family responsibilities","Finances","Health & sleep","Extracurriculars","All of the above"];
 const GOAL_OPTS=["Reduce stress & burnout","Stay on top of deadlines","Build better habits","Balance school & personal life","Improve focus & productivity","Feel more in control"];
 const YEAR_OPTS=["Freshman","Sophomore","Junior","Senior","Grad Student","Other"];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 function getDIM(y,m){return new Date(y,m+1,0).getDate();}
 function getFirst(y,m){return new Date(y,m,1).getDay();}
 function todayStr(){return new Date().toISOString().split("T")[0];}
 function pad(n){return String(n).padStart(2,"0");}
 function dkey(y,m,d){return `${y}-${pad(m+1)}-${pad(d)}`;}
 function fmtH(h){return h===0?"12am":h<12?`${h}am`:h===12?"12pm":`${h-12}pm`;}
+function fmtTime(iso){
+  const d=new Date(iso);
+  return d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
+}
 
 const Q_H={do:8,schedule:14,delegate:11,eliminate:16};
 function autoQ(t){
@@ -57,25 +61,104 @@ function taskBlock(t){
   return{id:"task-"+t.id,title:t.text,start:`${t.date}T${pad(sh)}:00:00`,end:`${t.date}T${pad(eh)}:00:00`,category:t.category||"personal",isTask:true,taskId:t.id};
 }
 function genRecurring(ev){
-  const{title,sh,eh,category,description,date,recur,recurDays,recurWeeks}=ev;
-  if(!date||recur==="none")return[{id:Date.now()+Math.random(),title,start:`${date}T${pad(sh)}:00:00`,end:`${date}T${pad(eh)}:00:00`,category,description:""}];
+  const{title,sh,eh,category,date,recur,recurDays,recurWeeks}=ev;
+  if(!date||recur==="none")return[{id:Date.now()+Math.random(),title,start:`${date}T${pad(sh)}:00:00`,end:`${date}T${pad(eh)}:00:00`,category,description:"",isRecurring:false}];
   const insts=[];
   const s=new Date(date+"T12:00:00"),tw=parseInt(recurWeeks)||4;
   const end=new Date(s);end.setDate(end.getDate()+tw*7);
+  const rid=title+"-"+date;
   if(recur==="daily"){
     const c=new Date(s);
-    while(c<=end){const d=`${c.getFullYear()}-${pad(c.getMonth()+1)}-${pad(c.getDate())}`;insts.push({id:Date.now()+Math.random(),title,start:`${d}T${pad(sh)}:00:00`,end:`${d}T${pad(eh)}:00:00`,category,description:"",recurId:title+date});c.setDate(c.getDate()+1);}
+    while(c<=end){
+      const d=`${c.getFullYear()}-${pad(c.getMonth()+1)}-${pad(c.getDate())}`;
+      insts.push({id:Date.now()+Math.random(),title,start:`${d}T${pad(sh)}:00:00`,end:`${d}T${pad(eh)}:00:00`,category,description:"",recurId:rid,isRecurring:true});
+      c.setDate(c.getDate()+1);
+    }
   } else {
     const days=(recurDays&&recurDays.length>0)?recurDays:[s.getDay()];
     const c=new Date(s);c.setDate(c.getDate()-c.getDay());
     let week=0;
     while(c<=end){
       if(recur==="biweekly"&&week%2!==0){c.setDate(c.getDate()+7);week++;continue;}
-      for(const day of days){const d=new Date(c);d.setDate(d.getDate()+day);if(d>=s&&d<=end){const ds=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;insts.push({id:Date.now()+Math.random(),title,start:`${ds}T${pad(sh)}:00:00`,end:`${ds}T${pad(eh)}:00:00`,category,description:"",recurId:title+date});}}
+      for(const day of days){
+        const dd=new Date(c);dd.setDate(dd.getDate()+day);
+        if(dd>=s&&dd<=end){
+          const ds=`${dd.getFullYear()}-${pad(dd.getMonth()+1)}-${pad(dd.getDate())}`;
+          insts.push({id:Date.now()+Math.random(),title,start:`${ds}T${pad(sh)}:00:00`,end:`${ds}T${pad(eh)}:00:00`,category,description:"",recurId:rid,isRecurring:true});
+        }
+      }
       c.setDate(c.getDate()+7);week++;
     }
   }
   return insts;
+}
+
+// Parse commitments text into recurring events starting today
+function parseCommitmentsToEvents(text){
+  if(!text||!text.trim())return[];
+  const events=[];
+  const today=new Date();
+  const lines=text.split("\n").filter(l=>l.trim());
+  const dayMap={su:0,sun:0,sunday:0,mo:1,mon:1,monday:1,tu:2,tue:2,tuesday:2,we:3,wed:3,wednesday:3,th:4,thu:4,thursday:4,fr:5,fri:5,friday:5,sa:6,sat:6,saturday:6};
+  const mwf=[1,3,5],tth=[2,4],mw=[1,3],wf=[3,5];
+
+  lines.forEach(line=>{
+    const low=line.toLowerCase();
+    let recurDays=[];
+    if(low.includes("mwf"))recurDays=mwf;
+    else if(low.includes("t/th")||low.includes("tth")||low.includes("tue/thu")||low.includes("tu/th"))recurDays=tth;
+    else if(low.includes("mw"))recurDays=mw;
+    else if(low.includes("wf"))recurDays=wf;
+    else{
+      const words=low.split(/[\s,/]+/);
+      words.forEach(w=>{if(dayMap[w]!==undefined&&!recurDays.includes(dayMap[w]))recurDays.push(dayMap[w]);});
+    }
+    if(recurDays.length===0)recurDays=[today.getDay()];
+
+    // Try to extract time
+    const timeMatch=line.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+    let sh=9,eh=10;
+    if(timeMatch){
+      let hr=parseInt(timeMatch[1]);
+      const min=timeMatch[2]?parseInt(timeMatch[2]):0;
+      const ampm=timeMatch[3]?.toLowerCase();
+      if(ampm==="pm"&&hr<12)hr+=12;
+      if(ampm==="am"&&hr===12)hr=0;
+      sh=hr;
+      // look for end time
+      const endMatch=line.match(/[-–]\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+      if(endMatch){
+        let ehr=parseInt(endMatch[1]);
+        const eampm=endMatch[3]?.toLowerCase()||(ehr<sh?"pm":ampm)||"am";
+        if(eampm==="pm"&&ehr<12)ehr+=12;
+        if(eampm==="am"&&ehr===12)ehr=0;
+        eh=ehr;
+      } else {
+        eh=sh+1;
+      }
+    }
+
+    // Detect category
+    let category="personal";
+    if(/class|lecture|lab|seminar|bio|chem|math|eng|hist|psych|cs|econ/i.test(line))category="class";
+    else if(/work|shift|job|intern/i.test(line))category="work";
+    else if(/gym|workout|run|yoga|exercise/i.test(line))category="personal";
+    else if(/study|review|homework/i.test(line))category="study";
+
+    // Title = first meaningful part
+    const title=line.replace(/(\d{1,2}(?::\d{2})?\s*(?:am|pm)?[\s\-–]*\d{0,2}(?::\d{2})?\s*(?:am|pm)?)/gi,"").replace(/\b(mwf|tth|mw|wf|mon|tue|wed|thu|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi,"").replace(/[,/]+/g,"").trim()||line.trim();
+
+    const startDate=new Date(today);
+    // Move to next occurrence of first recurDay
+    const firstDay=Math.min(...recurDays);
+    const diff=(firstDay-startDate.getDay()+7)%7;
+    startDate.setDate(startDate.getDate()+(diff===0?0:diff));
+    const dateStr=`${startDate.getFullYear()}-${pad(startDate.getMonth()+1)}-${pad(startDate.getDate())}`;
+
+    const instances=genRecurring({title,sh,eh,category,date:dateStr,recur:"weekly",recurDays,recurWeeks:16});
+    events.push(...instances);
+  });
+  return events;
 }
 
 function toGCal({title,start,end,description=""}){
@@ -88,7 +171,7 @@ function toICS(ev){
 }
 function dlICS(ev){const b=new Blob([toICS(ev)],{type:"text/calendar"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=ev.title.replace(/\s+/g,"_")+".ics";a.click();}
 
-// ── Shared styles ─────────────────────────────────────────────────────────────
+// ── Shared styles ──────────────────────────────────────────────────────────────
 const S={
   input:{padding:"9px 12px",borderRadius:8,border:"1.5px solid #c2dece",background:"#f8fbf9",fontSize:13,color:"#1a3028",outline:"none",fontFamily:"'DM Sans',sans-serif",width:"100%",boxSizing:"border-box"},
   btn:{padding:"10px 0",borderRadius:10,border:"none",background:"#4a9e7a",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:14,width:"100%"},
@@ -100,7 +183,7 @@ const S={
   smallBtn:{padding:"5px 11px",borderRadius:6,border:"none",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"},
 };
 
-// ── Modal wrapper ─────────────────────────────────────────────────────────────
+// ── Modal ──────────────────────────────────────────────────────────────────────
 function Modal({title,onClose,children}){
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16}}>
@@ -120,34 +203,54 @@ function ModalBtns({onCancel,onSave,label}){
   );
 }
 
-// ── EventCard (in chat) ───────────────────────────────────────────────────────
-function EventCard({ev,cats}){
-  const d=new Date(ev.start);
+// ── Now Banner — shows current/next event live ─────────────────────────────────
+function NowBanner({events,tasks,cats}){
+  const [now,setNow]=useState(new Date());
+  useEffect(()=>{const t=setInterval(()=>setNow(new Date()),30000);return()=>clearInterval(t);},[]);
+
+  const allBlocks=[
+    ...events,
+    ...(tasks||[]).filter(t=>!t.done&&t.date).map(taskBlock).filter(Boolean)
+  ];
+
+  const nowISO=now.toISOString();
+  const nowStr=now.toISOString().split("T")[0];
+
+  // Find event happening right now
+  const current=allBlocks.find(e=>{
+    if(!e.start||!e.end)return false;
+    return e.start<=nowISO&&e.end>=nowISO;
+  });
+
+  // Find next event today
+  const next=!current&&allBlocks
+    .filter(e=>e.start&&e.start.startsWith(nowStr)&&e.start>nowISO)
+    .sort((a,b)=>a.start>b.start?1:-1)[0];
+
+  if(!current&&!next)return null;
+
+  const ev=current||next;
   const cat=cats.find(c=>c.id===ev.category)||cats[3];
+  const startTime=fmtTime(ev.start);
+  const endTime=ev.end?fmtTime(ev.end):"";
+
   return(
-    <div style={{background:cat.bg,border:`1.5px solid ${cat.color}40`,borderRadius:12,padding:"11px 13px",marginTop:8}}>
-      <div style={{display:"flex",gap:9,alignItems:"flex-start"}}>
-        <div style={{background:cat.color,borderRadius:8,padding:"5px 9px",textAlign:"center",flexShrink:0,minWidth:42}}>
-          <div style={{fontSize:9,color:"rgba(255,255,255,0.8)",fontWeight:700,textTransform:"uppercase"}}>{MONTHS_S[d.getMonth()]}</div>
-          <div style={{fontSize:16,color:"#fff",fontWeight:700,lineHeight:1.1}}>{d.getDate()}</div>
-        </div>
-        <div style={{flex:1}}>
-          <div style={{fontWeight:600,fontSize:13,color:"#1a3028"}}>{cat.emoji} {ev.title}</div>
-          <div style={{fontSize:11,color:"#666",marginTop:2}}>{d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})} · {d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}</div>
-        </div>
-      </div>
-      <div style={{display:"flex",gap:6,marginTop:9}}>
-        <a href={toGCal(ev)} target="_blank" rel="noreferrer" style={{flex:1,padding:"6px 0",borderRadius:8,background:"#4285f4",color:"#fff",fontSize:11,fontWeight:600,textAlign:"center",textDecoration:"none"}}>Google Cal</a>
-        <button onClick={()=>dlICS(ev)} style={{flex:1,padding:"6px 0",borderRadius:8,background:"#fff",border:`1.5px solid ${cat.color}60`,color:cat.color,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Apple/.ics</button>
+    <div style={{background:cat.bg,border:`1.5px solid ${cat.color}`,borderRadius:12,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+      <div style={{width:8,height:8,borderRadius:"50%",background:cat.color,flexShrink:0,animation:current?"pulse 2s infinite":"none"}}/>
+      <div style={{flex:1}}>
+        <div style={{fontSize:11,fontWeight:700,color:cat.color,textTransform:"uppercase",letterSpacing:"0.05em"}}>{current?"Now":"Up next"}</div>
+        <div style={{fontSize:13,fontWeight:600,color:"#1a3028"}}>{cat.emoji} {ev.title}</div>
+        <div style={{fontSize:11,color:"#8aaa9a"}}>{startTime}{endTime&&` – ${endTime}`}</div>
       </div>
     </div>
   );
 }
 
-// ── Onboarding ────────────────────────────────────────────────────────────────
+// ── Onboarding styles (module-level to avoid hoisting crash) ───────────────────
 const OL_HD={fontFamily:"'Lora',serif",fontSize:20,fontWeight:600,color:"#1a3028",marginBottom:6};
 const OL_SB={fontSize:13,color:"#6a9a7a",marginBottom:12,lineHeight:1.6};
 
+// ── Onboarding ─────────────────────────────────────────────────────────────────
 function Onboarding({onDone}){
   const [step,setStep]=useState(0);
   const [fade,setFade]=useState(true);
@@ -156,16 +259,7 @@ function Onboarding({onDone}){
   const go=(dir)=>{setFade(false);setTimeout(()=>{setStep(s=>s+dir);setFade(true);},200);};
   const tog=(f,v)=>setD(p=>({...p,[f]:p[f].includes(v)?p[f].filter(x=>x!==v):[...p[f],v]}));
 
-  const canNext=[
-    d.name.trim().length>0,
-    d.year!=="",
-    d.stressors.length>0,
-    true,
-    true,
-    d.goals.length>0,
-    d.timeStyle!=="",
-    true,
-  ];
+  const canNext=[d.name.trim().length>0,d.year!=="",d.stressors.length>0,true,true,d.goals.length>0,d.timeStyle!=="",true];
 
   const steps=[
     <div key="0">
@@ -196,15 +290,15 @@ function Onboarding({onDone}){
     <div key="3">
       <div style={{fontSize:40,marginBottom:10}}>🗓️</div>
       <h2 style={OL_HD}>Recurring commitments</h2>
-      <p style={OL_SB}>Classes, work shifts, gym, clubs... Endive will always schedule around these.</p>
-      <textarea value={d.commitments} onChange={e=>setD(p=>({...p,commitments:e.target.value}))} placeholder={"e.g. BIO 101 MWF 10-11am\nWork Tue/Thu 3-6pm\nGym Mon/Wed 7am"} style={{...S.input,height:96,resize:"none",lineHeight:1.6}}/>
+      <p style={OL_SB}>Classes, work shifts, gym, clubs... Endive will schedule around these every week.</p>
+      <textarea value={d.commitments} onChange={e=>setD(p=>({...p,commitments:e.target.value}))} placeholder={"e.g. BIO 101 MWF 10-11am\nWork Tue/Thu 3-6pm\nGym Mon/Wed 7am"} style={{...S.input,height:100,resize:"none",lineHeight:1.6}}/>
       <p style={{fontSize:11,color:"#8aaa9a",marginTop:5}}>Optional — you can always add more later.</p>
     </div>,
 
     <div key="4">
       <div style={{fontSize:40,marginBottom:10}}>😴</div>
       <h2 style={OL_HD}>Your sleep schedule</h2>
-      <p style={OL_SB}>Endive will never schedule anything during your sleep. Ever.</p>
+      <p style={OL_SB}>Endive will never schedule anything during your sleep.</p>
       <div style={{display:"flex",gap:14,marginTop:4}}>
         <div style={{flex:1}}><label style={S.label}>Bedtime</label>
           <select value={d.sleepH} onChange={e=>setD(p=>({...p,sleepH:+e.target.value}))} style={S.input}>{HOURS.map(h=><option key={h} value={h}>{fmtH(h)}</option>)}</select>
@@ -242,7 +336,7 @@ function Onboarding({onDone}){
       <h2 style={{...OL_HD,textAlign:"center"}}>All set, {d.name}!</h2>
       <p style={{...OL_SB,textAlign:"center"}}>Endive knows what matters to you. Let's build something sustainable.</p>
       <div style={{background:"#e8f5ef",borderRadius:12,padding:"12px 16px",marginTop:14,textAlign:"left"}}>
-        {[`${d.year}`,`Style: ${TIME_STYLES.find(t=>t.id===d.timeStyle)?.label||"flexible"}`,`Sleep: ${fmtH(d.sleepH)} – ${fmtH(d.wakeH)}`,d.commitments?`${d.commitments.split("\n").filter(Boolean).length} recurring commitment(s)`:null].filter(Boolean).map((item,i)=>(
+        {[`${d.year}`,`Style: ${TIME_STYLES.find(t=>t.id===d.timeStyle)?.label||"flexible"}`,`Sleep: ${fmtH(d.sleepH)} – ${fmtH(d.wakeH)}`,d.commitments?`${d.commitments.split("\n").filter(Boolean).length} recurring commitment(s) added to calendar`:null].filter(Boolean).map((item,i)=>(
           <div key={i} style={{fontSize:12,color:"#2a5a3a",padding:"2px 0",display:"flex",gap:6}}><span style={{color:"#4a9e7a"}}>✓</span>{item}</div>
         ))}
       </div>
@@ -269,29 +363,30 @@ function Onboarding({onDone}){
   );
 }
 
-// ── Insight strip ─────────────────────────────────────────────────────────────
+// ── Insight strip ──────────────────────────────────────────────────────────────
 function getInsights(tasks,events){
-  const today=new Date(),todayS=todayStr();
-  const in3=new Date(today.getTime()+3*864e5).toISOString().split("T")[0];
-  const in7=new Date(today.getTime()+7*864e5).toISOString().split("T")[0];
+  const todayS=todayStr();
+  const in3=new Date(Date.now()+3*864e5).toISOString().split("T")[0];
+  const in7=new Date(Date.now()+7*864e5).toISOString().split("T")[0];
   const pending=tasks.filter(t=>!t.done);
-  const urgent=pending.filter(t=>t.date&&t.date<=in3);
   const ins=[];
   const hasRestToday=events.some(e=>e.category==="rest"&&e.start.startsWith(todayS));
-  if(!hasRestToday&&new Date().getHours()<18) ins.push({type:"rest",msg:"No rest block today. Endive can add one.",action:"Add a rest block for me today"});
-  const dayCounts={};events.forEach(e=>{const d=e.start.split("T")[0];if(d>=todayS&&d<=in7)dayCounts[d]=(dayCounts[d]||0)+1;});
+  if(!hasRestToday&&new Date().getHours()<18)ins.push({type:"rest",msg:"No rest block today. Want Endive to add one?",action:"Add a rest block for me today"});
+  const dayCounts={};
+  events.forEach(e=>{const dd=e.start.split("T")[0];if(dd>=todayS&&dd<=in7)dayCounts[dd]=(dayCounts[dd]||0)+1;});
   const heavy=Object.entries(dayCounts).filter(([,c])=>c>=4)[0];
   if(heavy){const label=new Date(heavy[0]+"T12:00:00").toLocaleDateString("en-US",{weekday:"long"});ins.push({type:"heavy",msg:`${label} looks packed. Want me to rebalance?`,action:`Rebalance my ${label}`});}
-  if(urgent.length>=3) ins.push({type:"urgent",msg:`${urgent.length} things due in 3 days. Make a plan?`,action:"Make a plan for my urgent tasks"});
+  const urgent=pending.filter(t=>t.date&&t.date<=in3);
+  if(urgent.length>=3)ins.push({type:"urgent",msg:`${urgent.length} things due in 3 days. Make a plan?`,action:"Make a plan for my urgent tasks"});
   return ins.slice(0,2);
 }
-const INS_STYLE={rest:{bg:"#f3eaf8",border:"#b07db8",color:"#7a4a8a",icon:"😴"},heavy:{bg:"#fceee8",border:"#e07b5a",color:"#a04a2a",icon:"⚡"},urgent:{bg:"#fdf3e0",border:"#e8a838",color:"#8a5a10",icon:"🔥"}};
+const INS_ST={rest:{bg:"#f3eaf8",border:"#b07db8",color:"#7a4a8a",icon:"😴"},heavy:{bg:"#fceee8",border:"#e07b5a",color:"#a04a2a",icon:"⚡"},urgent:{bg:"#fdf3e0",border:"#e8a838",color:"#8a5a10",icon:"🔥"}};
 function InsightStrip({tasks,events,onAction}){
   const ins=getInsights(tasks,events);
   if(!ins.length)return null;
   return(
     <div style={{marginBottom:12}}>
-      {ins.map((x,i)=>{const st=INS_STYLE[x.type]||INS_STYLE.rest;return(
+      {ins.map((x,i)=>{const st=INS_ST[x.type]||INS_ST.rest;return(
         <div key={i} style={{background:st.bg,border:`1px solid ${st.border}`,borderRadius:10,padding:"8px 11px",marginBottom:5,display:"flex",alignItems:"center",gap:8}}>
           <span style={{fontSize:15}}>{st.icon}</span>
           <span style={{flex:1,fontSize:12,color:st.color,lineHeight:1.4}}>{x.msg}</span>
@@ -302,7 +397,7 @@ function InsightStrip({tasks,events,onAction}){
   );
 }
 
-// ── Calendar tab ──────────────────────────────────────────────────────────────
+// ── Calendar tab ───────────────────────────────────────────────────────────────
 function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
   const today=new Date();
   const [view,setView]=useState("month");
@@ -310,7 +405,7 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
   const [showAdd,setShowAdd]=useState(false);
   const [showCat,setShowCat]=useState(false);
   const [editT,setEditT]=useState(null);
-  const [nEv,setNEv]=useState({title:"",date:todayStr(),sh:9,eh:10,category:"personal",description:"",recur:"none",recurDays:[],recurWeeks:4});
+  const [nEv,setNEv]=useState({title:"",date:todayStr(),sh:9,eh:10,category:"personal",recur:"none",recurDays:[],recurWeeks:4});
   const [nCat,setNCat]=useState({label:"",emoji:"📌",color:"#4a9e7a"});
 
   const allBlocks=[...events,...(tasks||[]).filter(t=>!t.done&&t.date).map(taskBlock).filter(Boolean)];
@@ -333,7 +428,8 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
   const saveEv=()=>{
     if(!nEv.title.trim())return;
     setEvents(p=>[...p,...genRecurring({...nEv,title:nEv.title.trim()})]);
-    setShowAdd(false);setNEv({title:"",date:todayStr(),sh:9,eh:10,category:"personal",description:"",recur:"none",recurDays:[],recurWeeks:4});
+    setShowAdd(false);
+    setNEv({title:"",date:todayStr(),sh:9,eh:10,category:"personal",recur:"none",recurDays:[],recurWeeks:4});
   };
   const saveCat=()=>{
     if(!nCat.label.trim())return;
@@ -348,14 +444,14 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
 
   const Chip=({ev})=>{
     const cat=cats.find(c=>c.id===ev.category)||cats[3];
-    return<div style={{fontSize:9,padding:"1px 4px",borderRadius:3,background:cat.color,color:"#fff",marginBottom:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{ev.recurId?"🔁 ":ev.isTask?"📌 ":""}{ev.title}</div>;
+    return<div style={{fontSize:9,padding:"1px 4px",borderRadius:3,background:cat.color,color:"#fff",marginBottom:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{ev.isRecurring?"🔁 ":ev.isTask?"📌 ":""}{ev.title}</div>;
   };
 
   return(
     <div>
+      <NowBanner events={events} tasks={tasks||[]} cats={cats}/>
       <InsightStrip tasks={tasks||[]} events={events} onAction={onAction||(() => {})}/>
 
-      {/* Controls */}
       <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10,alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",gap:3}}>
           {["year","month","week","day"].map(v=><button key={v} onClick={()=>setView(v)} style={{...S.smallBtn,background:view===v?"#4a9e7a":"#f0f7f2",color:view===v?"#fff":"#5a8a6a",textTransform:"capitalize"}}>{v}</button>)}
@@ -371,23 +467,22 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
         </div>
       </div>
 
-      {/* Legend */}
       <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:10}}>
         {cats.map(c=><span key={c.id} style={{fontSize:10,padding:"2px 7px",borderRadius:20,background:c.bg,color:c.color,fontWeight:600}}>{c.emoji} {c.label}</span>)}
       </div>
 
-      {/* Year view */}
+      {/* Year */}
       {view==="year"&&(
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
           {Array.from({length:12},(_,mi)=>{
             const cells=[];
             for(let i=0;i<getFirst(cur.y,mi);i++)cells.push(null);
-            for(let d=1;d<=getDIM(cur.y,mi);d++)cells.push(d);
+            for(let dd=1;dd<=getDIM(cur.y,mi);dd++)cells.push(dd);
             return(
               <div key={mi} onClick={()=>{setCur(c=>({...c,m:mi}));setView("month");}} style={{background:"#f8fbf9",borderRadius:9,padding:7,cursor:"pointer"}}>
                 <div style={{fontSize:10,fontWeight:700,color:"#4a9e7a",marginBottom:3}}>{MONTHS_S[mi]}</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:1}}>
-                  {cells.map((d,i)=>{const isT=d&&cur.y===today.getFullYear()&&mi===today.getMonth()&&d===today.getDate();const has=d&&evDay(dkey(cur.y,mi,d)).length>0;return<div key={i} style={{aspectRatio:"1",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:2,background:isT?"#4a9e7a":has?"#c2dece":"transparent",fontSize:7,color:isT?"#fff":"#2a4a3a"}}>{d}</div>;})}
+                  {cells.map((dd,i)=>{const isT=dd&&cur.y===today.getFullYear()&&mi===today.getMonth()&&dd===today.getDate();const has=dd&&evDay(dkey(cur.y,mi,dd)).length>0;return<div key={i} style={{aspectRatio:"1",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:2,background:isT?"#4a9e7a":has?"#c2dece":"transparent",fontSize:7,color:isT?"#fff":"#2a4a3a"}}>{dd}</div>;})}
                 </div>
               </div>
             );
@@ -395,7 +490,7 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
         </div>
       )}
 
-      {/* Month view */}
+      {/* Month */}
       {view==="month"&&(
         <div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:3}}>
@@ -405,7 +500,7 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
             {(()=>{
               const cells=[];
               for(let i=0;i<getFirst(cur.y,cur.m);i++)cells.push(null);
-              for(let d=1;d<=getDIM(cur.y,cur.m);d++)cells.push(d);
+              for(let dd=1;dd<=getDIM(cur.y,cur.m);dd++)cells.push(dd);
               return cells.map((day,i)=>{
                 const isT=day&&cur.y===today.getFullYear()&&cur.m===today.getMonth()&&day===today.getDate();
                 const des=day?evDay(dkey(cur.y,cur.m,day)):[];
@@ -422,7 +517,7 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
         </div>
       )}
 
-      {/* Week view */}
+      {/* Week */}
       {view==="week"&&(
         <div style={{overflowX:"auto"}}>
           <div style={{minWidth:460}}>
@@ -454,7 +549,7 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
         </div>
       )}
 
-      {/* Day view */}
+      {/* Day */}
       {view==="day"&&(
         <div style={{maxHeight:450,overflowY:"auto"}}>
           {HOURS.map(h=>{
@@ -470,7 +565,7 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
                     return(
                       <div key={ev.id} onClick={ev.isTask?()=>setEditT({tid:ev.taskId,sh:parseInt(ev.start.split("T")[1]||"9"),eh}):undefined} style={{padding:"5px 9px",borderRadius:8,background:cat.bg,borderLeft:`3px solid ${cat.color}`,fontSize:12,color:"#1a3028",flex:1,minWidth:110,cursor:ev.isTask?"pointer":"default"}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                          <span style={{fontWeight:600,flex:1}}>{ev.isTask?"📌 ":ev.recurId?"🔁 ":""}{ev.title}{ev.isTask&&<span style={{fontSize:9,opacity:0.5,marginLeft:4}}>tap to edit</span>}</span>
+                          <span style={{fontWeight:600,flex:1}}>{ev.isTask?"📌 ":ev.isRecurring?"🔁 ":""}{ev.title}{ev.isTask&&<span style={{fontSize:9,opacity:0.5,marginLeft:4}}>tap to edit</span>}</span>
                           {!ev.isTask&&<button onClick={e=>{e.stopPropagation();ev.recurId?setEvents(p=>p.filter(x=>x.recurId!==ev.recurId)):setEvents(p=>p.filter(x=>x.id!==ev.id));}} style={{background:"none",border:"none",color:"#ccc",cursor:"pointer",fontSize:14,lineHeight:1,padding:0}}>×</button>}
                         </div>
                         <div style={{fontSize:10,color:cat.color,marginTop:1}}>{pad(h)}:00 – {pad(eh)}:00</div>
@@ -484,7 +579,6 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
         </div>
       )}
 
-      {/* Modals */}
       {showAdd&&(
         <Modal title="Add Time Block" onClose={()=>setShowAdd(false)}>
           <input value={nEv.title} onChange={e=>setNEv(p=>({...p,title:e.target.value}))} placeholder="Title..." style={{...S.input,marginBottom:9}}/>
@@ -499,12 +593,12 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
           <select value={nEv.recur} onChange={e=>setNEv(p=>({...p,recur:e.target.value,recurDays:[]}))} style={{...S.input,marginBottom:nEv.recur!=="none"?8:12}}>
             <option value="none">Does not repeat</option>
             <option value="daily">Daily</option>
-            <option value="weekly">Weekly (pick days)</option>
+            <option value="weekly">Weekly</option>
             <option value="biweekly">Biweekly</option>
           </select>
           {(nEv.recur==="weekly"||nEv.recur==="biweekly")&&(
             <div style={{display:"flex",gap:5,marginBottom:9,flexWrap:"wrap"}}>
-              {["Su","Mo","Tu","We","Th","Fr","Sa"].map((d,i)=>{const sel=nEv.recurDays.includes(i);return<button key={i} onClick={()=>setNEv(p=>({...p,recurDays:sel?p.recurDays.filter(x=>x!==i):[...p.recurDays,i]}))} style={{width:34,height:34,borderRadius:"50%",border:`2px solid ${sel?"#4a9e7a":"#e0ece6"}`,background:sel?"#4a9e7a":"#fff",color:sel?"#fff":"#5a8a6a",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{d}</button>;})}
+              {["Su","Mo","Tu","We","Th","Fr","Sa"].map((dd,i)=>{const sel=nEv.recurDays.includes(i);return<button key={i} onClick={()=>setNEv(p=>({...p,recurDays:sel?p.recurDays.filter(x=>x!==i):[...p.recurDays,i]}))} style={{width:34,height:34,borderRadius:"50%",border:`2px solid ${sel?"#4a9e7a":"#e0ece6"}`,background:sel?"#4a9e7a":"#fff",color:sel?"#fff":"#5a8a6a",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{dd}</button>;})}
             </div>
           )}
           {nEv.recur!=="none"&&(
@@ -542,7 +636,7 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
   );
 }
 
-// ── Tasks tab ─────────────────────────────────────────────────────────────────
+// ── Tasks tab ──────────────────────────────────────────────────────────────────
 function TasksTab({tasks,setTasks,cats,events,onAction}){
   const [input,setInput]=useState("");
   const [date,setDate]=useState("");
@@ -556,7 +650,12 @@ function TasksTab({tasks,setTasks,cats,events,onAction}){
   };
   const toggle=id=>setTasks(p=>p.map(t=>t.id===id?{...t,done:!t.done}:t));
   const remove=id=>setTasks(p=>p.filter(t=>t.id!==id));
-  const getQ=t=>{if(t.quadrant)return t.quadrant;const urg=t.date&&t.date<=new Date(Date.now()+3*864e5).toISOString().split("T")[0];const imp=["class","study","work"].includes(t.category);if(urg&&imp)return"do";if(!urg&&imp)return"schedule";if(urg&&!imp)return"delegate";return"eliminate";};
+  const getQ=t=>{
+    if(t.quadrant)return t.quadrant;
+    const urg=t.date&&t.date<=new Date(Date.now()+3*864e5).toISOString().split("T")[0];
+    const imp=["class","study","work"].includes(t.category);
+    if(urg&&imp)return"do"; if(!urg&&imp)return"schedule"; if(urg&&!imp)return"delegate"; return"eliminate";
+  };
 
   const todayS=todayStr();
   const pending=tasks.filter(t=>!t.done);
@@ -626,53 +725,55 @@ function TasksTab({tasks,setTasks,cats,events,onAction}){
   );
 }
 
-// ── AI System prompt ──────────────────────────────────────────────────────────
-const SYS = `You are Endive, a warm and caring personal assistant for college students. You prevent burnout by balancing productivity with genuine rest.
+// ── System prompt ──────────────────────────────────────────────────────────────
+const SYS=`You are Endive, a warm and caring personal assistant for college students focused on preventing burnout.
 
-Keep ALL responses SHORT — 2 to 4 sentences max unless presenting a full day plan. Be warm, direct, and human. Never use long bullet lists.
+RESPONSE LENGTH: 2-4 sentences max unless building a full day plan. Be warm, direct, human. No long bullet lists.
 
-Workflow (follow naturally):
-1. Ask how they feel first — always
-2. Validate briefly with genuine empathy
-3. Gather tasks and deadlines
-4. Build a realistic plan: work blocks + breaks + hard stop time. Never more than 3 hours focus without a break. Always include at least one rest block per day.
-5. Show the plan simply. Ask if it feels doable.
-6. Once approved, add blocks to calendar. Then ask if anything else is needed.
+TIME: You will receive the user's current local time in context. If you do NOT have their time yet, ask: "Quick question — what time is it for you right now? I want to make sure I plan around your actual day." Do not ask again once you have it.
 
-Breaks to always include: short breaks (5-15 min, category rest), walk breaks (15-20 min), meals (30-60 min), wind-down at end of day. No work after 9pm.
+PLANNING RULES (follow every time you build a schedule):
+- Never schedule anything during the user's stated sleep hours
+- Always include: at least one meal break (30-60 min), short breaks every 90 min (10-15 min), a wind-down block before bed
+- No focused work after 9pm unless user insists
+- Schedule around their recurring commitments — treat those as immovable
+- If the day looks too full, say so and redistribute
+- Check in emotionally before diving into planning — a quick "how are you feeling?" first
 
-If they seem overwhelmed — check in emotionally first. Redistribute tasks if the load is too heavy. Celebrate small wins.
+CALENDAR BLOCKS: Add events directly to Endive's calendar. Do NOT show Google/Apple calendar links unless the user specifically asks for them. After adding blocks, ask: "Want me to give you links to add any of these to Google or Apple Calendar too?"
 
-To add a task (at END of reply only):
-TASK_JSON:{"text":"name","date":"YYYY-MM-DD","category":"personal","quadrant":"do"}
-
-To add a calendar block (at END of reply only):
+To add a calendar event (at END of reply, one per line):
 EVENT_JSON:{"title":"title","start":"YYYY-MM-DDTHH:MM:00","end":"YYYY-MM-DDTHH:MM:00","category":"rest","description":""}
+
+To add a task (at END of reply, one per line):
+TASK_JSON:{"text":"task name","date":"YYYY-MM-DD","category":"personal","quadrant":"do"}
 
 Categories: class, study, work, personal, errands, rest
 Quadrants: do, schedule, delegate, eliminate
-Multiple blocks per reply are fine. Never show raw JSON. Redirect if off-topic.`;
 
-function parseBlocks(text) {
-  const events = [];
-  const tasks = [];
-  const taskRe = /TASK_JSON:(\{[^\n]+\})/g;
-  const eventRe = /EVENT_JSON:(\{[^\n]+\})/g;
+BREAKS to always include:
+- ☕ Short break: 10-15 min (category: rest)  
+- 🚶 Walk: 15-20 min (category: rest)
+- 🍽️ Meal: 30-60 min (category: rest)
+- 😴 Wind-down: 20-30 min before bed (category: rest)
+
+If user seems overwhelmed, validate feelings before planning. Celebrate small wins. Redirect gently if off-topic.`;
+
+function parseBlocks(text){
+  const events=[],tasks=[];
+  const eRe=/EVENT_JSON:(\{[^\n]+\})/g;
+  const tRe=/TASK_JSON:(\{[^\n]+\})/g;
   let m;
-  while ((m = taskRe.exec(text)) !== null) { try { tasks.push(JSON.parse(m[1])); } catch(e) {} }
-  while ((m = eventRe.exec(text)) !== null) { try { events.push(JSON.parse(m[1])); } catch(e) {} }
-  return { events, tasks };
+  while((m=eRe.exec(text))!==null){try{events.push(JSON.parse(m[1]));}catch(e){}}
+  while((m=tRe.exec(text))!==null){try{tasks.push(JSON.parse(m[1]));}catch(e){}}
+  return{events,tasks};
 }
-function cleanText(text) {
-  return text.replace(/TASK_JSON:\{[^\n]+\}/g, "").replace(/EVENT_JSON:\{[^\n]+\}/g, "").trim();
-}
-function renderMd(text) {
-  return text.split(/(\*\*[^*]+\*\*)/).map((p, i) =>
-    p.startsWith("**") && p.endsWith("**") ? <strong key={i}>{p.slice(2,-2)}</strong> : p
-  );
+function cleanText(t){return t.replace(/EVENT_JSON:\{[^\n]+\}/g,"").replace(/TASK_JSON:\{[^\n]+\}/g,"").trim();}
+function renderMd(text){
+  return text.split(/(\*\*[^*]+\*\*)/).map((p,i)=>p.startsWith("**")&&p.endsWith("**")?<strong key={i}>{p.slice(2,-2)}</strong>:p);
 }
 
-// ── Chat tab ──────────────────────────────────────────────────────────────────
+// ── Chat tab ───────────────────────────────────────────────────────────────────
 function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,clearPending}){
   const [msgs,setMsgs]=useState([]);
   const [input,setInput]=useState("");
@@ -686,10 +787,7 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
   useEffect(()=>{ref.current?.scrollIntoView({behavior:"smooth"});},[msgs,loading]);
 
   useEffect(()=>{
-    if(pendingAction&&started&&!loading){
-      clearPending?.();
-      sendMsg(pendingAction);
-    }
+    if(pendingAction&&started&&!loading){clearPending?.();sendMsg(pendingAction);}
   },[pendingAction,started]);
 
   const speak=(text)=>{
@@ -710,7 +808,7 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
 
   const startListening=()=>{
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR){alert("Voice input needs Safari (iPhone) or Chrome.");return;}
+    if(!SR){alert("Voice input needs Safari or Chrome.");return;}
     const r=new SR();r.continuous=false;r.interimResults=false;r.lang="en-US";
     r.onstart=()=>setListening(true);
     r.onend=()=>setListening(false);
@@ -721,23 +819,32 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
   const stopListening=()=>{recRef.current?.stop();setListening(false);};
 
   const ctx=()=>{
-    const t=tasks.length>0?`Tasks:\n${tasks.map(t=>`- [${t.done?"✓":"○"}] ${t.text}${t.date?` due:${t.date}`:""} [${t.category}]`).join("\n")}`:"No tasks.";
-    const e=events.length>0?`Blocks:\n${events.slice(-5).map(e=>`- ${e.title} ${e.start.split("T")[0]} [${e.category}]`).join("\n")}`:"";
-    const p=profile?`Student: ${profile.name}, ${profile.year}. Stressors: ${profile.stressors?.join(", ")}. Style: ${TIME_STYLES.find(ts=>ts.id===profile.timeStyle)?.label||"flexible"}. Sleep: ${fmtH(profile.sleepH||22)}-${fmtH(profile.wakeH||7)}. Commitments: ${profile.commitments||"none"}.`:"";
-    return [p,t,e].filter(Boolean).join("\n");
+    const tz=Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const now=new Date().toLocaleString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true});
+    const recurEvents=events.filter(e=>e.isRecurring).slice(0,10).map(e=>`- ${e.title} [${e.category}] ${e.start}`).join("\n");
+    const taskList=tasks.length>0?tasks.map(t=>`- [${t.done?"✓":"○"}] ${t.text}${t.date?` due:${t.date}`:""} [${t.category}]`).join("\n"):"No tasks.";
+    const evList=events.filter(e=>!e.isRecurring).slice(-5).map(e=>`- ${e.title} ${e.start.split("T")[0]} [${e.category}]`).join("\n");
+    const p=profile?`Student: ${profile.name}, ${profile.year}. Stressors: ${profile.stressors?.join(", ")}. Style: ${TIME_STYLES.find(ts=>ts.id===profile.timeStyle)?.label||"flexible"}. Bedtime: ${fmtH(profile.sleepH||22)}, Wake: ${fmtH(profile.wakeH||7)}.`:"";
+    return[
+      `Current time: ${now} (${tz})`,
+      p,
+      recurEvents?`Recurring commitments:\n${recurEvents}`:"",
+      `Tasks:\n${taskList}`,
+      evList?`Recent calendar blocks:\n${evList}`:"",
+    ].filter(Boolean).join("\n");
   };
 
   const call=async(m)=>{
-    const now=new Date();
-    const timeCtx=`Right now: ${now.toLocaleString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric",hour:"numeric",minute:"2-digit",hour12:true})} (timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}).`;
-    const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,system:SYS+"\n\n"+timeCtx+"\n"+ctx(),messages:m.map(x=>({role:x.role,content:x.content}))})});
+    const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:500,system:SYS+"\n\n"+ctx(),messages:m.map(x=>({role:x.role,content:x.content}))})});
     return res.json();
   };
 
   useEffect(()=>{
     if(started)return;setStarted(true);setLoading(true);
-    const greetMsg=profile?`Greet ${profile.name} warmly by name. They are a ${profile.year}. Keep it to 2 sentences.`:"Start with your greeting.";
-    call([{role:"user",content:greetMsg}])
+    const greet=profile
+      ? `Greet ${profile.name} warmly by name (${profile.year}). Their time is already in your context. Ask how they're feeling today. 2 sentences max.`
+      : `Start with a warm greeting and ask how they're feeling.`;
+    call([{role:"user",content:greet}])
       .then(data=>{
         const raw=data.content?.map(b=>b.text||"").join("")||`Hi${profile?` ${profile.name}`:""}! 🌿 I'm Endive. How are you feeling today?`;
         const txt=cleanText(raw);
@@ -756,11 +863,14 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
     try{
       const data=await call(nm);
       const raw=data.content?.map(b=>b.text||"").join("")||"Sorry, something went wrong.";
-      const {events:ne,tasks:nt}=parseBlocks(raw);
+      const{events:ne,tasks:nt}=parseBlocks(raw);
       if(ne.length>0)setEvents(p=>[...p,...ne.map(e=>({...e,id:Date.now()+Math.random()}))]);
+      // Tasks from AI go into both tasks list AND calendar
       if(nt.length>0)setTasks(p=>[...p,...nt.map(t=>({...t,id:Date.now()+Math.random(),done:false}))]);
       const txt=cleanText(raw);
-      setMsgs(p=>[...p,{role:"assistant",content:txt,evs:ne,tsks:nt}]);
+      const addedEvs=ne.length>0?ne:[];
+      const addedTsks=nt.length>0?nt:[];
+      setMsgs(p=>[...p,{role:"assistant",content:txt,addedEvs,addedTsks}]);
       speak(txt);
     }catch{
       setMsgs(p=>[...p,{role:"assistant",content:"Something went wrong. Please try again."}]);
@@ -768,15 +878,14 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
     setLoading(false);
   };
 
-  const quick=["I'm feeling overwhelmed 😔","Help me plan my day with breaks","I have 3 assignments due soon","Remind me to rest today"];
+  const quick=["I'm feeling overwhelmed 😔","Help me plan my day","I have assignments due soon","What should I focus on now?"];
 
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
       <div style={{flex:1,overflowY:"auto",paddingRight:2,marginBottom:8}}>
         {msgs.length===0&&loading&&(
           <div style={{display:"flex",alignItems:"center",gap:8,color:"#6a9a7a",fontSize:13,marginTop:10}}>
-            <span>Endive is getting ready</span>
-            <Dots/>
+            <span>Endive is getting ready</span><Dots/>
           </div>
         )}
         {msgs.map((m,i)=>(
@@ -789,8 +898,27 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
                 </div>
               )}
               <div style={{padding:"10px 13px",borderRadius:m.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.role==="user"?"#4a9e7a":"#f0f7f2",color:m.role==="user"?"#fff":"#1a3028",fontSize:13,lineHeight:1.65,whiteSpace:"pre-wrap"}}>{renderMd(m.content)}</div>
-              {m.evs?.map((ev,j)=><EventCard key={j} ev={ev} cats={cats}/>)}
-              {m.tsks?.length>0&&<div style={{marginTop:5,padding:"6px 11px",background:"#e8f5ef",borderRadius:8,fontSize:12,color:"#3a7a5a"}}>✅ Added {m.tsks.length} task{m.tsks.length>1?"s":""} to My Plan</div>}
+              {/* Added events — stored in Endive calendar, no external links by default */}
+              {m.addedEvs?.length>0&&(
+                <div style={{marginTop:6,padding:"8px 11px",background:"#e8f5ef",border:"1px solid #9ad4bc",borderRadius:10,fontSize:12,color:"#2a6a4a"}}>
+                  <div style={{fontWeight:600,marginBottom:4}}>📅 Added to your Endive calendar:</div>
+                  {m.addedEvs.map((ev,j)=>{
+                    const cat=cats.find(c=>c.id===ev.category)||cats[3];
+                    const d=new Date(ev.start);
+                    return(
+                      <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderTop:j>0?"1px solid #c2dece40":"none"}}>
+                        <span>{cat.emoji} {ev.title} · {d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})} {fmtTime(ev.start)}</span>
+                        <button onClick={()=>{}} style={{fontSize:10,color:"#4a9e7a",background:"none",border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textDecoration:"underline"}} title="Ask Endive for external links">export?</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {m.addedTsks?.length>0&&(
+                <div style={{marginTop:5,padding:"6px 11px",background:"#e8f5ef",borderRadius:8,fontSize:12,color:"#3a7a5a"}}>
+                  ✅ Added {m.addedTsks.length} task{m.addedTsks.length>1?"s":""} to My Plan + Matrix
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -805,14 +933,7 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
       )}
 
       <div style={{display:"flex",gap:6,alignItems:"center"}}>
-        <input
-          value={input}
-          onChange={e=>setInput(e.target.value)}
-          onKeyDown={e=>e.key==="Enter"&&sendMsg()}
-          placeholder={listening?"Listening...":"Message Endive..."}
-          style={{...S.input,flex:1,background:listening?"#e8f5ef":"#f8fbf9",transition:"background 0.2s"}}
-        />
-        {/* Unified voice button — hold to talk, Endive speaks back */}
+        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMsg()} placeholder={listening?"Listening...":"Message Endive..."} style={{...S.input,flex:1,background:listening?"#e8f5ef":"#f8fbf9",transition:"background 0.2s"}}/>
         <button
           onMouseDown={()=>{setMuted(false);startListening();}}
           onMouseUp={stopListening}
@@ -821,17 +942,7 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
           title="Hold to talk — Endive will speak back"
           style={{width:48,height:40,borderRadius:10,background:listening?"#1a3028":"transparent",border:`1.5px solid ${listening?"#4a9e7a":"#c8dcd4"}`,display:"flex",alignItems:"center",justifyContent:"center",gap:2,cursor:"pointer",flexShrink:0,transition:"all 0.25s",padding:"0 9px"}}>
           {[3,5,8,5,3].map((h,i)=>(
-            <span key={i} style={{
-              width:3,
-              height:h,
-              borderRadius:2,
-              background:listening?"#4a9e7a":"#a0bcb4",
-              display:"block",
-              flexShrink:0,
-              transformOrigin:"center",
-              animation:listening?`wave 0.7s ease-in-out infinite`:"none",
-              animationDelay:`${i*0.12}s`,
-            }}/>
+            <span key={i} style={{width:3,height:h,borderRadius:2,background:listening?"#4a9e7a":"#a0bcb4",display:"block",flexShrink:0,transformOrigin:"center",animation:listening?"wave 0.7s ease-in-out infinite":"none",animationDelay:`${i*0.12}s`}}/>
           ))}
         </button>
         <button onClick={()=>sendMsg()} disabled={loading} style={{...S.iconBtn,background:loading?"#b2d2be":"#4a9e7a",fontSize:17}}>→</button>
@@ -841,9 +952,8 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
 }
 
 function Dots(){return<div style={{display:"flex",gap:3}}>{[0,1,2].map(i=><span key={i} style={{width:5,height:5,borderRadius:"50%",background:"#4a9e7a",animation:"pulse 1.2s infinite",animationDelay:`${i*0.2}s`,display:"block"}}/>)}</div>;}
-function MicIcon({color="white"}){return<svg width="15" height="15" viewBox="0 0 24 24" fill={color}><path d="M12 1a4 4 0 014 4v7a4 4 0 01-8 0V5a4 4 0 014-4zm0 18.5A7.5 7.5 0 014.5 12a.5.5 0 011 0 6.5 6.5 0 0013 0 .5.5 0 011 0A7.5 7.5 0 0112 19.5zm-1 1.5h2v2h-2z"/></svg>;}
 
-// ── App ───────────────────────────────────────────────────────────────────────
+// ── App ────────────────────────────────────────────────────────────────────────
 const TABS=["🌿 Endive","My Plan","My Calendar"];
 
 export default function App(){
@@ -856,7 +966,12 @@ export default function App(){
 
   const onDone=(p)=>{
     setProfile(p);
-    setPending(`My name is ${p.name}, I'm a ${p.year}. My stressors: ${p.stressors.join(", ")}. Commitments: ${p.commitments||"none"}. Sleep: ${fmtH(p.sleepH)} to ${fmtH(p.wakeH)}. Goals: ${p.goals.join(", ")}. Time style: ${TIME_STYLES.find(t=>t.id===p.timeStyle)?.label||"flexible"}. Please greet me warmly and let me know you have what you need.`);
+    // Parse recurring commitments → calendar events immediately
+    if(p.commitments&&p.commitments.trim()){
+      const recurEvs=parseCommitmentsToEvents(p.commitments);
+      if(recurEvs.length>0)setEvents(recurEvs);
+    }
+    setPending(`I just finished onboarding. My name is ${p.name}, I'm a ${p.year}. Stressors: ${p.stressors.join(", ")}. Goals: ${p.goals.join(", ")}. Time style: ${TIME_STYLES.find(t=>t.id===p.timeStyle)?.label||"flexible"}. Bedtime: ${fmtH(p.sleepH)}, wake: ${fmtH(p.wakeH)}. Commitments: ${p.commitments||"none"}. Greet me warmly by name and confirm you have my info. Keep it to 2 sentences.`);
   };
 
   const doAction=(action)=>{setPending(action);setTab("🌿 Endive");};
