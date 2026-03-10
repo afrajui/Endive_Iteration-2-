@@ -652,6 +652,21 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
 }
 
 // ── Tasks tab ──────────────────────────────────────────────────────────────────
+function TaskItem({t,cats,toggle,remove}){
+  const c=cats.find(x=>x.id===t.category)||cats[3];
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid #e8f2ec",opacity:t.done?0.4:1}}>
+      <button onClick={()=>toggle(t.id)} style={{width:17,height:17,borderRadius:4,border:`2px solid ${t.done?"#4a9e7a":"#b2d2be"}`,background:t.done?"#4a9e7a":"transparent",flexShrink:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        {t.done&&<span style={{color:"#fff",fontSize:9,fontWeight:700}}>✓</span>}
+      </button>
+      <span style={{width:7,height:7,borderRadius:"50%",background:c.color,flexShrink:0}}/>
+      <span style={{flex:1,fontSize:13,color:"#1a3028",textDecoration:t.done?"line-through":"none"}}>{t.text}</span>
+      {t.date&&<span style={{fontSize:11,color:"#8aaa9a"}}>{t.date.slice(5).replace("-","/")}</span>}
+      <button onClick={()=>remove(t.id)} style={{background:"none",border:"none",color:"#c2d8cc",cursor:"pointer",fontSize:15,lineHeight:1,padding:0}}>×</button>
+    </div>
+  );
+}
+
 function TasksTab({tasks,setTasks,cats,events,onAction}){
   const [input,setInput]=useState("");
   const [date,setDate]=useState("");
@@ -675,21 +690,6 @@ function TasksTab({tasks,setTasks,cats,events,onAction}){
   const todayS=todayStr();
   const pending=tasks.filter(t=>!t.done);
 
-  const Item=({t})=>{
-    const c=cats.find(x=>x.id===t.category)||cats[3];
-    return(
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid #e8f2ec",opacity:t.done?0.4:1}}>
-        <button onClick={()=>toggle(t.id)} style={{width:17,height:17,borderRadius:4,border:`2px solid ${t.done?"#4a9e7a":"#b2d2be"}`,background:t.done?"#4a9e7a":"transparent",flexShrink:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          {t.done&&<span style={{color:"#fff",fontSize:9,fontWeight:700}}>✓</span>}
-        </button>
-        <span style={{width:7,height:7,borderRadius:"50%",background:c.color,flexShrink:0}}/>
-        <span style={{flex:1,fontSize:13,color:"#1a3028",textDecoration:t.done?"line-through":"none"}}>{t.text}</span>
-        {t.date&&<span style={{fontSize:11,color:"#8aaa9a"}}>{t.date.slice(5).replace("-","/")}</span>}
-        <button onClick={()=>remove(t.id)} style={{background:"none",border:"none",color:"#c2d8cc",cursor:"pointer",fontSize:15,lineHeight:1,padding:0}}>×</button>
-      </div>
-    );
-  };
-
   return(
     <div>
       <InsightStrip tasks={tasks} events={events||[]} onAction={onAction||(() => {})}/>
@@ -710,10 +710,10 @@ function TasksTab({tasks,setTasks,cats,events,onAction}){
       {sub==="list"&&(
         <div>
           {tasks.length===0&&<p style={{color:"#8aaa9a",fontSize:13,textAlign:"center",marginTop:20}}>No tasks yet — add one above!</p>}
-          {pending.filter(t=>!t.date||t.date===todayS).length>0&&<><div style={S.sec}>Current</div>{pending.filter(t=>!t.date||t.date===todayS).map(t=><Item key={t.id} t={t}/>)}</>}
-          {pending.filter(t=>t.date&&t.date<todayS).length>0&&<><div style={{...S.sec,marginTop:12,color:"#e07b5a"}}>Overdue</div>{pending.filter(t=>t.date&&t.date<todayS).sort((a,b)=>a.date>b.date?1:-1).map(t=><Item key={t.id} t={t}/>)}</>}
-          {pending.filter(t=>t.date&&t.date>todayS).length>0&&<><div style={{...S.sec,marginTop:12}}>Upcoming</div>{pending.filter(t=>t.date&&t.date>todayS).sort((a,b)=>a.date>b.date?1:-1).map(t=><Item key={t.id} t={t}/>)}</>}
-          {tasks.filter(t=>t.done).length>0&&<><div style={{...S.sec,marginTop:12,opacity:0.5}}>Done</div>{tasks.filter(t=>t.done).map(t=><Item key={t.id} t={t}/>)}</>}
+          {pending.filter(t=>!t.date||t.date===todayS).length>0&&<><div style={S.sec}>Current</div>{pending.filter(t=>!t.date||t.date===todayS).map(t=><TaskItem key={t.id} t={t} cats={cats} toggle={toggle} remove={remove}/>)}</>}
+          {pending.filter(t=>t.date&&t.date<todayS).length>0&&<><div style={{...S.sec,marginTop:12,color:"#e07b5a"}}>Overdue</div>{pending.filter(t=>t.date&&t.date<todayS).sort((a,b)=>a.date>b.date?1:-1).map(t=><TaskItem key={t.id} t={t} cats={cats} toggle={toggle} remove={remove}/>)}</>}
+          {pending.filter(t=>t.date&&t.date>todayS).length>0&&<><div style={{...S.sec,marginTop:12}}>Upcoming</div>{pending.filter(t=>t.date&&t.date>todayS).sort((a,b)=>a.date>b.date?1:-1).map(t=><TaskItem key={t.id} t={t} cats={cats} toggle={toggle} remove={remove}/>)}</>}
+          {tasks.filter(t=>t.done).length>0&&<><div style={{...S.sec,marginTop:12,opacity:0.5}}>Done</div>{tasks.filter(t=>t.done).map(t=><TaskItem key={t.id} t={t} cats={cats} toggle={toggle} remove={remove}/>)}</>}
         </div>
       )}
       {sub==="matrix"&&(
