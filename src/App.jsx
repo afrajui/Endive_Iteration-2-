@@ -241,7 +241,7 @@ function NowBanner({events,tasks,cats}){
   const ev=current||next;
   if(!ev)return null;
 
-  const cat=cats.find(c=>c.id===ev.category)||cats[3];
+  const cat=cats?.find(c=>c.id===ev.category)||cats?.[0]||{bg:"#f0f7f2",color:"#4a9e7a",emoji:"📌",label:"Other"};
   return(
     <div style={{background:cat.bg,border:`1.5px solid ${cat.color}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
       <div style={{width:8,height:8,borderRadius:"50%",background:cat.color,flexShrink:0,animation:current?"pulse 2s infinite":"none"}}/>
@@ -451,7 +451,7 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
   };
 
   const Chip=({ev})=>{
-    const cat=cats.find(c=>c.id===ev.category)||cats[3];
+    const cat=cats?.find(c=>c.id===ev.category)||cats?.[0]||{bg:"#f0f7f2",color:"#4a9e7a",emoji:"📌",label:"Other"};
     return<div style={{fontSize:9,padding:"1px 4px",borderRadius:3,background:cat.color,color:"#fff",marginBottom:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{ev.isRecurring?"🔁 ":ev.isTask?"📌 ":""}{ev.title}</div>;
   };
 
@@ -546,7 +546,7 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
                     const dk2=`${nd.getFullYear()}-${pad(nd.getMonth()+1)}-${pad(nd.getDate())}`;
                     const slotEvs=allBlocks.filter(e=>e.start.startsWith(dk2)&&parseInt(e.start.split("T")[1]||"0")===h);
                     return<div key={di} style={{borderTop:"1px solid #f0f5f2",minHeight:32}}>
-                      {slotEvs.map(ev=>{const cat=cats.find(c=>c.id===ev.category)||cats[3];return<div key={ev.id} style={{fontSize:9,padding:"2px 3px",borderRadius:3,background:cat.color,color:"#fff",margin:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{ev.isTask?"📌 ":""}{ev.title}</div>;})}
+                      {slotEvs.map(ev=>{const cat=cats?.find(c=>c.id===ev.category)||cats?.[0]||{bg:"#f0f7f2",color:"#4a9e7a",emoji:"📌",label:"Other"};return<div key={ev.id} style={{fontSize:9,padding:"2px 3px",borderRadius:3,background:cat.color,color:"#fff",margin:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{ev.isTask?"📌 ":""}{ev.title}</div>;})}
                     </div>;
                   })}
                 </div>
@@ -571,7 +571,7 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
             const dk2=dkey(cur.y,cur.m,cur.d);
             const dayEvs=allBlocks.filter(e=>e.start.startsWith(dk2));
             return dayEvs.map(ev=>{
-              const cat=cats.find(c=>c.id===ev.category)||cats[3];
+              const cat=cats?.find(c=>c.id===ev.category)||cats?.[0]||{bg:"#f0f7f2",color:"#4a9e7a",emoji:"📌",label:"Other"};
               const sh=parseInt(ev.start.split("T")[1]||"0");
               const eh=ev.end?parseInt(ev.end.split("T")[1]||String(sh+1)):sh+1;
               const duration=Math.max(eh-sh,1);
@@ -653,7 +653,7 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
 
 // ── Tasks tab ──────────────────────────────────────────────────────────────────
 function TaskItem({t,cats,toggle,remove}){
-  const c=cats.find(x=>x.id===t.category)||cats[3];
+  const c=cats?.find(x=>x.id===t.category)||cats?.[0]||{bg:"#f0f7f2",color:"#4a9e7a",emoji:"📌"};
   return(
     <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid #e8f2ec",opacity:t.done?0.4:1}}>
       <button onClick={()=>toggle(t.id)} style={{width:17,height:17,borderRadius:4,border:`2px solid ${t.done?"#4a9e7a":"#b2d2be"}`,background:t.done?"#4a9e7a":"transparent",flexShrink:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -949,7 +949,7 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
                 <div style={{marginTop:6,padding:"8px 11px",background:"#e8f5ef",border:"1px solid #9ad4bc",borderRadius:10,fontSize:12,color:"#2a6a4a"}}>
                   <div style={{fontWeight:600,marginBottom:4}}>📅 Added to your Endive calendar:</div>
                   {m.addedEvs.map((ev,j)=>{
-                    const cat=cats.find(c=>c.id===ev.category)||cats[3];
+                    const cat=cats?.find(c=>c.id===ev.category)||cats?.[0]||{bg:"#f0f7f2",color:"#4a9e7a",emoji:"📌",label:"Other"};
                     const d=isoDate(ev.start);
                     return(
                       <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderTop:j>0?"1px solid #c2dece40":"none"}}>
