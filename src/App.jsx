@@ -67,6 +67,7 @@ function autoQ(t){
   if(urg&&imp)return"do"; if(!urg&&imp)return"schedule";
   if(urg&&!imp)return"delegate"; return"eliminate";
 }
+const Q_H={do:8,schedule:14,delegate:11,eliminate:16};
 function taskBlock(t){
   if(!t.date)return null;
   const q=t.quadrant||autoQ(t);
