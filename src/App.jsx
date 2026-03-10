@@ -864,7 +864,7 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
   };
 
   const call=async(m)=>{
-    const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:500,system:SYS+"\n\n"+ctx(),messages:m.map(x=>({role:x.role,content:x.content}))})});
+    const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,system:SYS+"\n\n"+ctx(),messages:m.map(x=>({role:x.role,content:x.content}))})});
     return res.json();
   };
 
