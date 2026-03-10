@@ -37,7 +37,9 @@ const YEAR_OPTS=["Freshman","Sophomore","Junior","Senior","Grad Student","Other"
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function getDIM(y,m){return new Date(y,m+1,0).getDate();}
 function getFirst(y,m){return new Date(y,m,1).getDay();}
-function todayStr(){return new Date().toISOString().split("T")[0];}
+function todayStr(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+function localISO(d=new Date()){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}T${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:00`;}
+function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
 function pad(n){return String(n).padStart(2,"0");}
 function dkey(y,m,d){return `${y}-${pad(m+1)}-${pad(d)}`;}
 function fmtH(h){return h===0?"12am":h<12?`${h}am`:h===12?"12pm":`${h-12}pm`;}
@@ -48,7 +50,7 @@ function fmtTime(iso){
 
 const Q_H={do:8,schedule:14,delegate:11,eliminate:16};
 function autoQ(t){
-  const urg=t.date&&t.date<=new Date(Date.now()+3*864e5).toISOString().split("T")[0];
+  const urg=t.date&&t.date<=addDays(3);
   const imp=["class","study","work"].includes(t.category);
   if(urg&&imp)return"do"; if(!urg&&imp)return"schedule";
   if(urg&&!imp)return"delegate"; return"eliminate";
@@ -208,25 +210,33 @@ function NowBanner({events,tasks,cats}){
   const [now,setNow]=useState(new Date());
   useEffect(()=>{const t=setInterval(()=>setNow(new Date()),30000);return()=>clearInterval(t);},[]);
 
-  const nowISO=now.toISOString();
-  const todayStr=now.toISOString().split("T")[0];
+  const todayS=todayStr();
+  const nowLocal=localISO(now);
 
   const allBlocks=[
     ...events,
     ...(tasks||[]).filter(t=>!t.done&&t.date).map(taskBlock).filter(Boolean)
-  ].filter(e=>e.start&&e.start.startsWith(todayStr));
+  ].filter(e=>e.start&&e.start.startsWith(todayS));
 
-  const current=allBlocks.find(e=>e.end&&e.start<=nowISO&&e.end>=nowISO);
-  if(!current)return null;
+  // Currently happening
+  const current=allBlocks.find(e=>e.end&&e.start<=nowLocal&&e.end>=nowLocal);
 
-  const cat=cats.find(c=>c.id===current.category)||cats[3];
+  // Next upcoming today
+  const next=!current&&allBlocks
+    .filter(e=>e.start>nowLocal)
+    .sort((a,b)=>a.start>b.start?1:-1)[0];
+
+  const ev=current||next;
+  if(!ev)return null;
+
+  const cat=cats.find(c=>c.id===ev.category)||cats[3];
   return(
     <div style={{background:cat.bg,border:`1.5px solid ${cat.color}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
-      <div style={{width:8,height:8,borderRadius:"50%",background:cat.color,flexShrink:0,animation:"pulse 2s infinite"}}/>
+      <div style={{width:8,height:8,borderRadius:"50%",background:cat.color,flexShrink:0,animation:current?"pulse 2s infinite":"none"}}/>
       <div style={{flex:1}}>
-        <div style={{fontSize:11,fontWeight:700,color:cat.color,textTransform:"uppercase",letterSpacing:"0.05em"}}>Now</div>
-        <div style={{fontSize:13,fontWeight:600,color:"#1a3028"}}>{cat.emoji} {current.title}</div>
-        <div style={{fontSize:11,color:"#8aaa9a"}}>{fmtTime(current.start)}{current.end&&` – ${fmtTime(current.end)}`}</div>
+        <div style={{fontSize:11,fontWeight:700,color:cat.color,textTransform:"uppercase",letterSpacing:"0.05em"}}>{current?"Now":"Up next"}</div>
+        <div style={{fontSize:13,fontWeight:600,color:"#1a3028"}}>{cat.emoji} {ev.title}</div>
+        <div style={{fontSize:11,color:"#8aaa9a"}}>{fmtTime(ev.start)}{ev.end&&` – ${fmtTime(ev.end)}`}</div>
       </div>
     </div>
   );
@@ -352,8 +362,8 @@ function Onboarding({onDone}){
 // ── Insight strip ──────────────────────────────────────────────────────────────
 function getInsights(tasks,events){
   const todayS=todayStr();
-  const in3=new Date(Date.now()+3*864e5).toISOString().split("T")[0];
-  const in7=new Date(Date.now()+7*864e5).toISOString().split("T")[0];
+  const in3=addDays(3);
+  const in7=addDays(7);
   const pending=tasks.filter(t=>!t.done);
   const ins=[];
   const hasRestToday=events.some(e=>e.category==="rest"&&e.start.startsWith(todayS));
@@ -637,7 +647,7 @@ function TasksTab({tasks,setTasks,cats,events,onAction}){
   const remove=id=>setTasks(p=>p.filter(t=>t.id!==id));
   const getQ=t=>{
     if(t.quadrant)return t.quadrant;
-    const urg=t.date&&t.date<=new Date(Date.now()+3*864e5).toISOString().split("T")[0];
+    const urg=t.date&&t.date<=addDays(3);
     const imp=["class","study","work"].includes(t.category);
     if(urg&&imp)return"do"; if(!urg&&imp)return"schedule"; if(urg&&!imp)return"delegate"; return"eliminate";
   };
@@ -680,7 +690,7 @@ function TasksTab({tasks,setTasks,cats,events,onAction}){
       {sub==="list"&&(
         <div>
           {tasks.length===0&&<p style={{color:"#8aaa9a",fontSize:13,textAlign:"center",marginTop:20}}>No tasks yet — add one above!</p>}
-          {pending.filter(t=>!t.date||t.date===todayS).length>0&&<><div style={S.sec}>Today</div>{pending.filter(t=>!t.date||t.date===todayS).map(t=><Item key={t.id} t={t}/>)}</>}
+          {pending.filter(t=>!t.date||t.date===todayS).length>0&&<><div style={S.sec}>Current</div>{pending.filter(t=>!t.date||t.date===todayS).map(t=><Item key={t.id} t={t}/>)}</>}
           {pending.filter(t=>t.date&&t.date<todayS).length>0&&<><div style={{...S.sec,marginTop:12,color:"#e07b5a"}}>Overdue</div>{pending.filter(t=>t.date&&t.date<todayS).sort((a,b)=>a.date>b.date?1:-1).map(t=><Item key={t.id} t={t}/>)}</>}
           {pending.filter(t=>t.date&&t.date>todayS).length>0&&<><div style={{...S.sec,marginTop:12}}>Upcoming</div>{pending.filter(t=>t.date&&t.date>todayS).sort((a,b)=>a.date>b.date?1:-1).map(t=><Item key={t.id} t={t}/>)}</>}
           {tasks.filter(t=>t.done).length>0&&<><div style={{...S.sec,marginTop:12,opacity:0.5}}>Done</div>{tasks.filter(t=>t.done).map(t=><Item key={t.id} t={t}/>)}</>}
