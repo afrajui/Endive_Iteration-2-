@@ -208,39 +208,25 @@ function NowBanner({events,tasks,cats}){
   const [now,setNow]=useState(new Date());
   useEffect(()=>{const t=setInterval(()=>setNow(new Date()),30000);return()=>clearInterval(t);},[]);
 
+  const nowISO=now.toISOString();
+  const todayStr=now.toISOString().split("T")[0];
+
   const allBlocks=[
     ...events,
     ...(tasks||[]).filter(t=>!t.done&&t.date).map(taskBlock).filter(Boolean)
-  ];
+  ].filter(e=>e.start&&e.start.startsWith(todayStr));
 
-  const nowISO=now.toISOString();
-  const nowStr=now.toISOString().split("T")[0];
+  const current=allBlocks.find(e=>e.end&&e.start<=nowISO&&e.end>=nowISO);
+  if(!current)return null;
 
-  // Find event happening right now
-  const current=allBlocks.find(e=>{
-    if(!e.start||!e.end)return false;
-    return e.start<=nowISO&&e.end>=nowISO;
-  });
-
-  // Find next event today
-  const next=!current&&allBlocks
-    .filter(e=>e.start&&e.start.startsWith(nowStr)&&e.start>nowISO)
-    .sort((a,b)=>a.start>b.start?1:-1)[0];
-
-  if(!current&&!next)return null;
-
-  const ev=current||next;
-  const cat=cats.find(c=>c.id===ev.category)||cats[3];
-  const startTime=fmtTime(ev.start);
-  const endTime=ev.end?fmtTime(ev.end):"";
-
+  const cat=cats.find(c=>c.id===current.category)||cats[3];
   return(
-    <div style={{background:cat.bg,border:`1.5px solid ${cat.color}`,borderRadius:12,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
-      <div style={{width:8,height:8,borderRadius:"50%",background:cat.color,flexShrink:0,animation:current?"pulse 2s infinite":"none"}}/>
+    <div style={{background:cat.bg,border:`1.5px solid ${cat.color}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
+      <div style={{width:8,height:8,borderRadius:"50%",background:cat.color,flexShrink:0,animation:"pulse 2s infinite"}}/>
       <div style={{flex:1}}>
-        <div style={{fontSize:11,fontWeight:700,color:cat.color,textTransform:"uppercase",letterSpacing:"0.05em"}}>{current?"Now":"Up next"}</div>
-        <div style={{fontSize:13,fontWeight:600,color:"#1a3028"}}>{cat.emoji} {ev.title}</div>
-        <div style={{fontSize:11,color:"#8aaa9a"}}>{startTime}{endTime&&` – ${endTime}`}</div>
+        <div style={{fontSize:11,fontWeight:700,color:cat.color,textTransform:"uppercase",letterSpacing:"0.05em"}}>Now</div>
+        <div style={{fontSize:13,fontWeight:600,color:"#1a3028"}}>{cat.emoji} {current.title}</div>
+        <div style={{fontSize:11,color:"#8aaa9a"}}>{fmtTime(current.start)}{current.end&&` – ${fmtTime(current.end)}`}</div>
       </div>
     </div>
   );
@@ -694,7 +680,8 @@ function TasksTab({tasks,setTasks,cats,events,onAction}){
       {sub==="list"&&(
         <div>
           {tasks.length===0&&<p style={{color:"#8aaa9a",fontSize:13,textAlign:"center",marginTop:20}}>No tasks yet — add one above!</p>}
-          {pending.filter(t=>t.date===todayS||!t.date).length>0&&<><div style={S.sec}>Today</div>{pending.filter(t=>t.date===todayS||!t.date).map(t=><Item key={t.id} t={t}/>)}</>}
+          {pending.filter(t=>!t.date||t.date===todayS).length>0&&<><div style={S.sec}>Today</div>{pending.filter(t=>!t.date||t.date===todayS).map(t=><Item key={t.id} t={t}/>)}</>}
+          {pending.filter(t=>t.date&&t.date<todayS).length>0&&<><div style={{...S.sec,marginTop:12,color:"#e07b5a"}}>Overdue</div>{pending.filter(t=>t.date&&t.date<todayS).sort((a,b)=>a.date>b.date?1:-1).map(t=><Item key={t.id} t={t}/>)}</>}
           {pending.filter(t=>t.date&&t.date>todayS).length>0&&<><div style={{...S.sec,marginTop:12}}>Upcoming</div>{pending.filter(t=>t.date&&t.date>todayS).sort((a,b)=>a.date>b.date?1:-1).map(t=><Item key={t.id} t={t}/>)}</>}
           {tasks.filter(t=>t.done).length>0&&<><div style={{...S.sec,marginTop:12,opacity:0.5}}>Done</div>{tasks.filter(t=>t.done).map(t=><Item key={t.id} t={t}/>)}</>}
         </div>
@@ -731,6 +718,13 @@ RESPONSE LENGTH: 2-4 sentences max unless building a full day plan. Be warm, dir
 
 TIME: You will receive the user's current local time in context. If you do NOT have their time yet, ask: "Quick question — what time is it for you right now? I want to make sure I plan around your actual day." Do not ask again once you have it.
 
+TASK TRACKING RULES (critical — follow every single time):
+- ANY time the user mentions a task, assignment, project, deadline, or "due" date — you MUST output a TASK_JSON for it at the end of your reply, no exceptions.
+- If the user says "TikTok project due tonight", output a TASK_JSON. If they say "I have an essay due Friday", output a TASK_JSON. Always.
+- After adding a task, say: "I've added that to your Task tab — you can track it and update it there anytime."
+- Occasionally (not every message) remind users: "Your Task tab is the best place to see everything on your plate and how it fits in your week."
+- Use quadrant "do" for anything due within 2 days, "schedule" for 3-7 days, "delegate" for low importance, "eliminate" for optional/low value.
+
 PLANNING RULES (follow every time you build a schedule):
 - Never schedule anything during the user's stated sleep hours
 - Always include: at least one meal break (30-60 min), short breaks every 90 min (10-15 min), a wind-down block before bed
@@ -739,7 +733,9 @@ PLANNING RULES (follow every time you build a schedule):
 - If the day looks too full, say so and redistribute
 - Check in emotionally before diving into planning — a quick "how are you feeling?" first
 
-CALENDAR BLOCKS: Add events directly to Endive's calendar. Do NOT show Google/Apple calendar links unless the user specifically asks for them. After adding blocks, ask: "Want me to give you links to add any of these to Google or Apple Calendar too?"
+CALENDAR BLOCKS: Add events directly to Endive's calendar. Do NOT show Google/Apple calendar links unless the user specifically asks. After adding blocks, ask: "Want me to give you links to add any of these to Google or Apple Calendar too?"
+
+DUPLICATE PREVENTION: Never add an event or task that already exists in the user's context. Check the existing tasks and calendar blocks before outputting any JSON.
 
 To add a calendar event (at END of reply, one per line):
 EVENT_JSON:{"title":"title","start":"YYYY-MM-DDTHH:MM:00","end":"YYYY-MM-DDTHH:MM:00","category":"rest","description":""}
@@ -748,10 +744,10 @@ To add a task (at END of reply, one per line):
 TASK_JSON:{"text":"task name","date":"YYYY-MM-DD","category":"personal","quadrant":"do"}
 
 Categories: class, study, work, personal, errands, rest
-Quadrants: do, schedule, delegate, eliminate
+Quadrants: do (due ≤2 days), schedule (3-7 days), delegate (low importance), eliminate (optional)
 
-BREAKS to always include:
-- ☕ Short break: 10-15 min (category: rest)  
+BREAKS to always include in plans:
+- ☕ Short break: 10-15 min (category: rest)
 - 🚶 Walk: 15-20 min (category: rest)
 - 🍽️ Meal: 30-60 min (category: rest)
 - 😴 Wind-down: 20-30 min before bed (category: rest)
@@ -777,15 +773,22 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
   const [msgs,setMsgs]=useState([]);
   const [input,setInput]=useState("");
   const [loading,setLoading]=useState(false);
-  const [started,setStarted]=useState(false);
   const [listening,setListening]=useState(false);
   const ref=useRef(null);
   const recRef=useRef(null);
+  const startedRef=useRef(false); // ref so effects don't re-run on state change
+  const pendingFiredRef=useRef(false);
 
   useEffect(()=>{ref.current?.scrollIntoView({behavior:"smooth"});},[msgs,loading]);
+
+  // Fire pendingAction once after greeting loaded
   useEffect(()=>{
-    if(pendingAction&&started&&!loading){clearPending?.();sendMsg(pendingAction);}
-  },[pendingAction,started]);
+    if(pendingAction&&!pendingFiredRef.current&&!loading&&msgs.length>0){
+      pendingFiredRef.current=true;
+      clearPending?.();
+      sendMsg(pendingAction);
+    }
+  },[pendingAction,loading,msgs.length]);
 
   const startListening=()=>{
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -825,7 +828,9 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
   };
 
   useEffect(()=>{
-    if(started)return;setStarted(true);setLoading(true);
+    if(startedRef.current)return;
+    startedRef.current=true;
+    setLoading(true);
     const greet=profile
       ? `Greet ${profile.name} warmly by name (${profile.year}). Their time is already in your context. Ask how they're feeling today. 2 sentences max.`
       : `Start with a warm greeting and ask how they're feeling.`;
@@ -843,17 +848,35 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
     const u=(text||input).trim();if(!u||loading)return;
     setInput("");
     const nm=[...msgs,{role:"user",content:u}];
-    setMsgs(nm);setLoading(true);
+    setMsgs(nm);
+    setLoading(true);
     try{
       const data=await call(nm);
       const raw=data.content?.map(b=>b.text||"").join("")||"Sorry, something went wrong.";
+      // Parse all blocks first before any state updates
       const{events:ne,tasks:nt}=parseBlocks(raw);
-      if(ne.length>0)setEvents(p=>[...p,...ne.map(e=>({...e,id:Date.now()+Math.random()}))]);
-      if(nt.length>0)setTasks(p=>[...p,...nt.map(t=>{
-        const q=t.quadrant||autoQ({date:t.date,category:t.category});
-        return{...t,id:Date.now()+Math.random(),done:false,quadrant:q};
-      })]);
       const txt=cleanText(raw);
+      // Update events — deduplicate by title + date
+      if(ne.length>0){
+        setEvents(p=>{
+          const existing=new Set(p.map(x=>(x.title+"_"+(x.start||"").slice(0,10)).toLowerCase()));
+          const fresh=ne
+            .filter(e=>!existing.has((e.title+"_"+(e.start||"").slice(0,10)).toLowerCase()))
+            .map(e=>({...e,id:Date.now()+Math.random()}));
+          return fresh.length>0?[...p,...fresh]:p;
+        });
+      }
+      // Update tasks — deduplicate by text
+      if(nt.length>0){
+        setTasks(p=>{
+          const existing=new Set(p.map(x=>x.text.toLowerCase().trim()));
+          const fresh=nt
+            .filter(t=>!existing.has(t.text.toLowerCase().trim()))
+            .map(t=>({...t,id:Date.now()+Math.random(),done:false,quadrant:t.quadrant||autoQ({date:t.date,category:t.category})}));
+          return fresh.length>0?[...p,...fresh]:p;
+        });
+      }
+      // Update messages last
       setMsgs(p=>[...p,{role:"assistant",content:txt,addedEvs:ne,addedTsks:nt}]);
     }catch{
       setMsgs(p=>[...p,{role:"assistant",content:"Something went wrong. Please try again."}]);
@@ -937,12 +960,20 @@ function Dots(){return<div style={{display:"flex",gap:3}}>{[0,1,2].map(i=><span 
 const TABS=["🌿 Endive","My Plan","My Calendar"];
 
 export default function App(){
-  const [profile,setProfile]=useState(null);
-  const [tasks,setTasks]=useState([]);
-  const [events,setEvents]=useState([]);
-  const [cats,setCats]=useState(CATS);
+  const load=(key,fallback)=>{try{const v=localStorage.getItem(key);return v?JSON.parse(v):fallback;}catch{return fallback;}};
+
+  const [profile,setProfile]=useState(()=>load("endive_profile",null));
+  const [tasks,setTasks]=useState(()=>load("endive_tasks",[]));
+  const [events,setEvents]=useState(()=>load("endive_events",[]));
+  const [cats,setCats]=useState(()=>load("endive_cats",CATS));
   const [tab,setTab]=useState("🌿 Endive");
   const [pending,setPending]=useState(null);
+
+  // Persist to localStorage whenever state changes
+  useEffect(()=>{try{localStorage.setItem("endive_tasks",JSON.stringify(tasks));}catch{}},[tasks]);
+  useEffect(()=>{try{localStorage.setItem("endive_events",JSON.stringify(events));}catch{}},[events]);
+  useEffect(()=>{try{localStorage.setItem("endive_cats",JSON.stringify(cats));}catch{}},[cats]);
+  useEffect(()=>{try{if(profile)localStorage.setItem("endive_profile",JSON.stringify(profile));}catch{}},[profile]);
 
   const onDone=(p)=>{
     setProfile(p);
