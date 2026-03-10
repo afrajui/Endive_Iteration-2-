@@ -44,11 +44,23 @@ function pad(n){return String(n).padStart(2,"0");}
 function dkey(y,m,d){return `${y}-${pad(m+1)}-${pad(d)}`;}
 function fmtH(h){return h===0?"12am":h<12?`${h}am`:h===12?"12pm":`${h-12}pm`;}
 function fmtTime(iso){
-  const d=new Date(iso);
-  return d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
+  // Parse directly from string to avoid any UTC/local timezone shift
+  if(!iso)return"";
+  const t=iso.split("T")[1];
+  if(!t)return"";
+  const[hStr,mStr]=t.split(":");
+  const h=parseInt(hStr),m=parseInt(mStr);
+  const ampm=h<12?"AM":"PM";
+  const h12=h===0?12:h>12?h-12:h;
+  return`${h12}:${String(m).padStart(2,"0")} ${ampm}`;
 }
 
-const Q_H={do:8,schedule:14,delegate:11,eliminate:16};
+// Parse display date from ISO string without UTC shift
+function isoDate(iso){
+  if(!iso)return"";
+  const[y,m,d]=iso.split("T")[0].split("-");
+  return new Date(parseInt(y),parseInt(m)-1,parseInt(d));
+}
 function autoQ(t){
   const urg=t.date&&t.date<=addDays(3);
   const imp=["class","study","work"].includes(t.category);
@@ -743,7 +755,12 @@ PLANNING RULES (follow every time you build a schedule):
 - If the day looks too full, say so and redistribute
 - Check in emotionally before diving into planning — a quick "how are you feeling?" first
 
-CALENDAR BLOCKS: Add events directly to Endive's calendar. Do NOT show Google/Apple calendar links unless the user specifically asks. After adding blocks, ask: "Want me to give you links to add any of these to Google or Apple Calendar too?"
+TIME FORMAT RULES (critical):
+- ALL times in EVENT_JSON must be the user's LOCAL time, not UTC.
+- "Due by 12AM tonight" means the deadline is 11:59PM that same night — schedule a work block BEFORE it, like 8PM-10PM, not AT midnight.
+- "Class from 1-2PM Monday" → start: "YYYY-MM-DDT13:00:00", end: "YYYY-MM-DDT14:00:00" for that Monday's date.
+- Never output T00:00:00 for an event start unless the user explicitly says "midnight". Midnight means the very end of the day, not the beginning.
+- When scheduling around a deadline, create a WORK block ending 30-60 min before the deadline, not at the deadline time itself.
 
 DUPLICATE PREVENTION: Never add an event or task that already exists in the user's context. Check the existing tasks and calendar blocks before outputting any JSON.
 
@@ -919,7 +936,7 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
                   <div style={{fontWeight:600,marginBottom:4}}>📅 Added to your Endive calendar:</div>
                   {m.addedEvs.map((ev,j)=>{
                     const cat=cats.find(c=>c.id===ev.category)||cats[3];
-                    const d=new Date(ev.start);
+                    const d=isoDate(ev.start);
                     return(
                       <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderTop:j>0?"1px solid #c2dece40":"none"}}>
                         <span>{cat.emoji} {ev.title} · {d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})} {fmtTime(ev.start)}</span>
