@@ -449,7 +449,6 @@ function CalendarTab({events,setEvents,cats,setCats,tasks,setTasks,onAction}){
 
   return(
     <div>
-      <NowBanner events={events} tasks={tasks||[]} cats={cats}/>
       <InsightStrip tasks={tasks||[]} events={events} onAction={onAction||(() => {})}/>
 
       <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10,alignItems:"center",justifyContent:"space-between"}}>
@@ -850,7 +849,10 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
       const raw=data.content?.map(b=>b.text||"").join("")||"Sorry, something went wrong.";
       const{events:ne,tasks:nt}=parseBlocks(raw);
       if(ne.length>0)setEvents(p=>[...p,...ne.map(e=>({...e,id:Date.now()+Math.random()}))]);
-      if(nt.length>0)setTasks(p=>[...p,...nt.map(t=>({...t,id:Date.now()+Math.random(),done:false}))]);
+      if(nt.length>0)setTasks(p=>[...p,...nt.map(t=>{
+        const q=t.quadrant||autoQ({date:t.date,category:t.category});
+        return{...t,id:Date.now()+Math.random(),done:false,quadrant:q};
+      })]);
       const txt=cleanText(raw);
       setMsgs(p=>[...p,{role:"assistant",content:txt,addedEvs:ne,addedTsks:nt}]);
     }catch{
@@ -992,6 +994,7 @@ export default function App(){
               </div>
             </div>
             {pendingCount>0&&<div style={{marginTop:8,padding:"5px 12px",background:"#fff",borderRadius:10,border:"1px solid #c2dece",display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:7,height:7,borderRadius:"50%",background:"#4a9e7a",display:"inline-block"}}/><span style={{fontSize:12,color:"#3a6a4a"}}><strong>{pendingCount}</strong> task{pendingCount!==1?"s":""} pending</span></div>}
+            <div style={{marginTop:10}}><NowBanner events={events} tasks={tasks} cats={cats}/></div>
           </div>
 
           <div style={{background:"#fff",borderRadius:20,boxShadow:"0 2px 28px rgba(26,48,40,0.08)",overflow:"hidden"}}>
