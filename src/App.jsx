@@ -779,66 +779,30 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
   const [input,setInput]=useState("");
   const [loading,setLoading]=useState(false);
   const [started,setStarted]=useState(false);
-  // Voice overlay state
-  const [voiceOpen,setVoiceOpen]=useState(false);
-  const [voiceState,setVoiceState]=useState("idle"); // idle | listening | thinking | speaking
-  const [voiceBubble,setVoiceBubble]=useState(""); // last Endive response shown in overlay
+  const [listening,setListening]=useState(false);
   const ref=useRef(null);
   const recRef=useRef(null);
-  const synthRef=useRef(null);
 
   useEffect(()=>{ref.current?.scrollIntoView({behavior:"smooth"});},[msgs,loading]);
-
   useEffect(()=>{
     if(pendingAction&&started&&!loading){clearPending?.();sendMsg(pendingAction);}
   },[pendingAction,started]);
 
-  const exitVoice=()=>{
-    window.speechSynthesis.cancel();
-    recRef.current?.stop();
-    setVoiceOpen(false);
-    setVoiceState("idle");
-  };
-
-  const speak=(text,onEnd)=>{
-    window.speechSynthesis.cancel();
-    const clean=text.replace(/[*_#]/g,"").replace(/[^\x00-\x7F]/g,"").trim();
-    if(!clean){onEnd?.();return;}
-    const utt=new SpeechSynthesisUtterance(clean);
-    utt.rate=0.88;utt.pitch=1.0;utt.volume=0.95;
-    utt.onend=()=>{setVoiceState("idle");onEnd?.();};
-    synthRef.current=utt;
-    const trySpeak=()=>{
-      const voices=window.speechSynthesis.getVoices();
-      const pick=voices.find(v=>/^samantha$|^karen$|^moira$|google us english/i.test(v.name))||voices.find(v=>v.lang==="en-US"&&v.localService);
-      if(pick)utt.voice=pick;
-      window.speechSynthesis.speak(utt);
-    };
-    if(window.speechSynthesis.getVoices().length>0)trySpeak();
-    else window.speechSynthesis.onvoiceschanged=trySpeak;
-  };
-
   const startListening=()=>{
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SR){alert("Voice input needs Safari or Chrome.");return;}
-    window.speechSynthesis.cancel();
     const r=new SR();r.continuous=false;r.interimResults=false;r.lang="en-US";
-    r.onstart=()=>setVoiceState("listening");
-    r.onend=()=>{if(voiceState==="listening")setVoiceState("idle");}; 
-    r.onerror=()=>setVoiceState("idle");
+    r.onstart=()=>setListening(true);
+    r.onend=()=>setListening(false);
+    r.onerror=()=>setListening(false);
     r.onresult=(e)=>{
       const t=e.results[0][0].transcript;
-      setVoiceState("thinking");
-      sendVoiceMsg(t);
+      setInput(t);
+      setTimeout(()=>sendMsg(t),200);
     };
-    recRef.current=r;
-    r.start();
+    recRef.current=r;r.start();
   };
-
-  const stopListening=()=>{
-    recRef.current?.stop();
-    setVoiceState("idle");
-  };
+  const stopListening=()=>{recRef.current?.stop();setListening(false);};
 
   const ctx=()=>{
     const tz=Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -871,35 +835,10 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
         const raw=data.content?.map(b=>b.text||"").join("")||`Hi${profile?` ${profile.name}`:""}! 🌿 I'm Endive. How are you feeling today?`;
         const txt=cleanText(raw);
         setMsgs([{role:"assistant",content:txt}]);
-        setTimeout(()=>speak(txt),600);
       })
       .catch(()=>setMsgs([{role:"assistant",content:`Hi${profile?` ${profile.name}`:""}! 🌿 I'm Endive. How are you feeling today?`}]))
       .finally(()=>setLoading(false));
   },[]);
-
-  const sendVoiceMsg=async(text)=>{
-    const u=text.trim();if(!u)return;
-    const nm=[...msgs,{role:"user",content:u}];
-    setMsgs(nm);
-    try{
-      const data=await call(nm);
-      const raw=data.content?.map(b=>b.text||"").join("")||"Sorry, something went wrong.";
-      const{events:ne,tasks:nt}=parseBlocks(raw);
-      if(ne.length>0)setEvents(p=>[...p,...ne.map(e=>({...e,id:Date.now()+Math.random()}))]);
-      if(nt.length>0)setTasks(p=>[...p,...nt.map(t=>({...t,id:Date.now()+Math.random(),done:false}))]);
-      const txt=cleanText(raw);
-      setMsgs(p=>[...p,{role:"assistant",content:txt,addedEvs:ne,addedTsks:nt}]);
-      setVoiceBubble(txt);
-      setVoiceState("speaking");
-      speak(txt,()=>{
-        // after speaking, auto-listen again
-        setTimeout(()=>startListening(),600);
-      });
-    }catch{
-      setVoiceState("idle");
-      setVoiceBubble("Something went wrong. Tap to try again.");
-    }
-  };
 
   const sendMsg=async(text)=>{
     const u=(text||input).trim();if(!u||loading)return;
@@ -922,91 +861,8 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
 
   const quick=["I'm feeling overwhelmed 😔","Help me plan my day","I have assignments due soon","What should I focus on now?"];
 
-  // ── Voice overlay ──────────────────────────────────────────────────────────
-  const VoiceOverlay=()=>{
-    const isListening=voiceState==="listening";
-    const isSpeaking=voiceState==="speaking";
-    const isThinking=voiceState==="thinking";
-    const isIdle=voiceState==="idle";
-
-    // Circle size & glow based on state
-    const circleSize=isListening?130:isSpeaking?118:104;
-    const glowColor=isListening?"#6dffb8":isSpeaking?"#4a9e7a":"#3a7a5a";
-    const glowSize=isListening?40:isSpeaking?28:18;
-
-    return(
-      <div style={{position:"fixed",inset:0,background:"#1a3a2a",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif"}}>
-
-        {/* Exit button */}
-        <button onClick={exitVoice} style={{position:"absolute",top:24,right:24,width:40,height:40,borderRadius:"50%",background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.7)",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",transition:"all 0.2s"}}>✕</button>
-
-        {/* Endive label */}
-        <div style={{position:"absolute",top:28,left:0,right:0,textAlign:"center"}}>
-          <span style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,0.35)",letterSpacing:"0.1em",textTransform:"uppercase"}}>Endive</span>
-        </div>
-
-        {/* Speech bubble above circle */}
-        <div style={{width:"80%",maxWidth:320,minHeight:72,marginBottom:40,transition:"opacity 0.4s",opacity:voiceBubble?1:0}}>
-          {voiceBubble&&(
-            <div style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:16,padding:"12px 16px",color:"rgba(255,255,255,0.85)",fontSize:14,lineHeight:1.6,textAlign:"center",position:"relative"}}>
-              {voiceBubble}
-              {/* bubble tail */}
-              <div style={{position:"absolute",bottom:-8,left:"50%",transform:"translateX(-50%)",width:0,height:0,borderLeft:"8px solid transparent",borderRight:"8px solid transparent",borderTop:"8px solid rgba(255,255,255,0.07)"}}/>
-            </div>
-          )}
-        </div>
-
-        {/* Main circle — tap to listen/stop */}
-        <div
-          onClick={isListening?stopListening:isIdle?startListening:undefined}
-          style={{
-            width:circleSize,height:circleSize,borderRadius:"50%",
-            background:`radial-gradient(circle at 40% 35%, ${isListening?"#5ddfaa":isSpeaking?"#4a9e7a":"#2d6a4a"}, ${isListening?"#1a5a3a":isSpeaking?"#1a4a2a":"#0f2a1a"})`,
-            boxShadow:`0 0 ${glowSize}px ${glowSize/2}px ${glowColor}40, 0 0 ${glowSize*2}px ${glowColor}18`,
-            cursor:isThinking?"default":"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center",
-            transition:"all 0.4s cubic-bezier(0.34,1.56,0.64,1)",
-            animation:isListening?"voiceListen 1.2s ease-in-out infinite":isSpeaking?"voiceSpeak 1.8s ease-in-out infinite":isThinking?"voiceThink 1s ease-in-out infinite":"voiceIdle 3.5s ease-in-out infinite",
-            position:"relative",
-          }}>
-
-          {/* Ripple rings — only when listening */}
-          {isListening&&[1,2,3].map(i=>(
-            <div key={i} style={{position:"absolute",borderRadius:"50%",border:`1.5px solid ${glowColor}`,width:circleSize+i*28,height:circleSize+i*28,animation:`ripple 1.8s ease-out infinite`,animationDelay:`${i*0.3}s`,opacity:0,pointerEvents:"none"}}/>
-          ))}
-
-          {/* Glow ring — when speaking */}
-          {isSpeaking&&(
-            <div style={{position:"absolute",borderRadius:"50%",border:"2px solid #4a9e7a60",width:circleSize+16,height:circleSize+16,animation:"voiceSpeak 1.8s ease-in-out infinite"}}/>
-          )}
-
-          {/* Icon inside */}
-          <div style={{fontSize:isListening?32:24,transition:"all 0.3s",filter:"drop-shadow(0 0 8px rgba(255,255,255,0.3))"}}>
-            {isListening?"🎙️":isSpeaking?"🌿":isThinking?"✦":"🌿"}
-          </div>
-        </div>
-
-        {/* State label */}
-        <div style={{marginTop:28,height:20}}>
-          <span style={{fontSize:13,color:"rgba(255,255,255,0.4)",letterSpacing:"0.06em",transition:"opacity 0.3s"}}>
-            {isListening?"Listening…":isSpeaking?"Speaking…":isThinking?"Thinking…":"Tap to speak"}
-          </span>
-        </div>
-
-        {/* Thinking dots */}
-        {isThinking&&(
-          <div style={{display:"flex",gap:5,marginTop:8}}>
-            {[0,1,2].map(i=><span key={i} style={{width:5,height:5,borderRadius:"50%",background:"#4a9e7a",display:"block",animation:"pulse 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
-      {voiceOpen&&<VoiceOverlay/>}
-
       <div style={{flex:1,overflowY:"auto",paddingRight:2,marginBottom:8}}>
         {msgs.length===0&&loading&&(
           <div style={{display:"flex",alignItems:"center",gap:8,color:"#6a9a7a",fontSize:13,marginTop:10}}>
@@ -1056,15 +912,15 @@ function ChatTab({tasks,setTasks,events,setEvents,cats,profile,pendingAction,cle
         </div>
       )}
 
-      {/* Input bar — waveform button opens voice overlay */}
+      {/* Input bar */}
       <div style={{display:"flex",gap:6,alignItems:"center"}}>
-        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMsg()} placeholder="Message Endive..." style={{...S.input,flex:1}}/>
+        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMsg()} placeholder={listening?"Listening...":"Message Endive..."} style={{...S.input,flex:1,background:listening?"#e8f5ef":"#f8fbf9",transition:"background 0.2s"}}/>
         <button
-          onClick={()=>{setVoiceBubble("");setVoiceOpen(true);setVoiceState("idle");setTimeout(()=>startListening(),400);}}
-          title="Voice mode"
-          style={{width:48,height:40,borderRadius:10,background:"transparent",border:"1.5px solid #c8dcd4",display:"flex",alignItems:"center",justifyContent:"center",gap:2,cursor:"pointer",flexShrink:0,padding:"0 9px"}}>
+          onClick={listening?stopListening:startListening}
+          title="Tap to speak"
+          style={{width:40,height:40,borderRadius:10,background:listening?"#e8f5ef":"transparent",border:`1.5px solid ${listening?"#4a9e7a":"#c8dcd4"}`,display:"flex",alignItems:"center",justifyContent:"center",gap:2,cursor:"pointer",flexShrink:0,transition:"all 0.2s",padding:"0 8px"}}>
           {[3,5,8,5,3].map((h,i)=>(
-            <span key={i} style={{width:3,height:h,borderRadius:2,background:"#a0bcb4",display:"block",flexShrink:0}}/>
+            <span key={i} style={{width:3,height:h,borderRadius:2,background:listening?"#4a9e7a":"#a0bcb4",display:"block",flexShrink:0,transformOrigin:"center",animation:listening?"wave 0.7s ease-in-out infinite":"none",animationDelay:`${i*0.12}s`}}/>
           ))}
         </button>
         <button onClick={()=>sendMsg()} disabled={loading} style={{...S.iconBtn,background:loading?"#b2d2be":"#4a9e7a",fontSize:17}}>→</button>
